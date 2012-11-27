@@ -1,0 +1,30 @@
+
+Some scripts for processing movie subtitles
+
+
+srt2xml.pl .... convert subtitles in srt-format to simple OPUS-style XML 
+                format (does sentence splitting and tokenization)
+                (uses nonbreaking_prefix.* files for tokenization
+                 which are just copies from the files distributed with 
+                 the Europarl corpus version 3)
+
+		Note that subtitle files are usually DOS files and 
+		srt2xml.pl expects UNIX-style text files! 
+		--> use dos2unix before piping the text into srt2xml.pl
+
+		for Dutch: if you want to use Alpino for tokenization:
+		srt2xml.pl looks by default for the tokenizer in
+		$ENV{ALPINO_HOME}/Tokenization/tokenize.sh
+		(adjust if you need to)
+
+srtalign.pl ... align srt-files which have been converted to XML using 
+		srt2xml.pl (requires time-stamps!)
+		For more information on using this script and its options:
+		Look at the header of the script!
+
+dic/ .......... This directory contains word alignment dictionaries
+		obtained by aligning the OpenSubtitles corpus from OPUS
+		These dictionaries can be used to improve sentence 
+		alignment by synchronizing time stamps with the help of
+		anchor points found by matching dictionary entries with
+		word pairs in the subtitle pair
