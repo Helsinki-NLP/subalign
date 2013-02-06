@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# -*-perl-*-
+#-*-perl-*-
 #
 # sentence aligner for subtitle files based on aligning time intervals
 #
@@ -37,9 +37,6 @@
 # only two points will be used (one from the begiining and one from the end
 # with the best scores)
 #
-
-## on cluster (for XML::Parser):
-use lib '/home/ruglt180/tiedeman/usr/lib/perl/5.8.4';
 
 use XML::Parser;
 use IO::File;

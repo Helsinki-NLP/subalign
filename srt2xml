@@ -1,4 +1,5 @@
 #!/usr/bin/perl
+#-*-perl-*-
 #
 # convert srt files (movie subtitles) to tokenized XML (utf8)
 # (very simple tokenization & sentence splitting)
@@ -55,7 +56,7 @@ if ($opt_l eq 'chi' || $opt_l eq 'zho'){
 
 ## read (non-breaking) abbreviations (if the file exists)
 my %NONBREAKING=();
-read_non_breaking($Bin.'/nonbreaking_prefix.'.$opt_l,\%NONBREAKING);
+read_non_breaking($Bin.'/share/nonbreaking_prefix.'.$opt_l,\%NONBREAKING);
 
 
 my $enc = $opt_e || LangEncoding($opt_l);
