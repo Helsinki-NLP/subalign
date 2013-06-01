@@ -47,32 +47,12 @@ my %SPLIT_AT_TIMEFRAME = (
     );
 
 
-if ($opt_l eq 'chi' || $opt_l eq 'zho'){
-#    $ENV{UPLUGHOME} = $ENV{HOME}.'/projects/Uplug/uplug';
-    $ENV{UPLUGHOME} = $Bin.'/../..';
-    require "$ENV{UPLUGHOME}/ext/chinese/segment/segmenter.pl";
-#    require "$Bin/../../ext/chinese/segment/segmenter.pl";
-}
-
 ## read (non-breaking) abbreviations (if the file exists)
 my %NONBREAKING=();
 read_non_breaking($Bin.'/share/nonbreaking_prefix.'.$opt_l,\%NONBREAKING);
 
 
 my $enc = $opt_e || LangEncoding($opt_l);
-
-#use IO::File;
-#use POSIX qw(tmpnam);
-#my $tmpfile;
-#my $uplug=$ENV{HOME}.'/projects/Uplug/uplug/uplug';
-#if ($opt_l eq 'jpn'){
-#    my $fh;
-#    do {$tmpfile=tmpnam();}
-#    until ($fh=IO::File->new($tmpfile,O_RDWR|O_CREAT|O_EXCL));
-#    $fh->close();
-#    *OUT = *STDOUT;
-#    open STDOUT,">$tmpfile";
-#}
 
 # binmode(STDIN,':encoding(iso-8859-1)');
 # binmode(STDIN,":encoding($enc)");
@@ -90,7 +70,6 @@ if ($opt_r){
     }
     binmode(F,':encoding(utf8)');
 }
-
 
 print_xml_header();
 
@@ -130,6 +109,10 @@ my @closedtags=();
 my $first=1;
 
 while (my $line = <>){
+
+    if ($line=~/Dieses Thema/){
+	print '';
+    }
 
     # check if the first line has a BOM
     # --~ try to detect encoding!
@@ -287,7 +270,7 @@ while (my $line = <>){
 	## - add sentence boundaries
 	## - tokenize and print text from previous sentence
 
-	while ($line=~/^(.*?[.!?:\]])([^.!?:].*)$/){
+	while ($line=~/^(.*?[.!?:\]])([^.!?:].*)$/s){
 
 	    my $before=$1;
 	    my $after=$2;
@@ -405,12 +388,6 @@ print F "\n  </s>\n" if ($opt_r);
 
 print_xml_footer();
 
-#if ($opt_l eq 'jpn'){
-#    print OUT `$uplug pre/ja/toktag -in $tmpfile`;
-#    unlink $tmpfile;
-#}
-
-
 ####################################################################
 
 
@@ -460,7 +437,7 @@ sub print_tokens{
     if ($opt_l=~/^(chi|zho)$/){
 	return print_chinese_tokens($string,$sid,$wid);
     }
-    # no japanese tokenization (leave it to Uplug and ChaSen)
+    # no japanese tokenization (leave it to subsequent processes)
     if ($opt_l=~/^jpn$/){
 	$string=~s/\<.*?\>//gs;  # remove all XML tags to keep it simple
 	$string=~s/&/&amp;/g;
@@ -523,11 +500,7 @@ sub print_tokens{
 sub print_chinese_tokens{
     my ($string,$sid,$wid)=@_;
 
-#    $ENV{UPLUGHOME} = $ENV{HOME}.'/projects/Uplug/uplug';
-#    require "$ENV{UPLUGHOME}/ext/chinese/segment/segmenter.pl";
-
     ## segmenter works with big5 coded strings ....
-    require Encode;
     my $big5 = Encode::encode( 'big5', $string );
 
     my $seg = segmentline($big5);
