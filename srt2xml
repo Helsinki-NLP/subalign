@@ -18,13 +18,14 @@ use IPC::Open3;
 use FindBin qw($Bin);
 use Encode;
 use File::BOM qw( :all );
-
+use File::ShareDir;
 
 use vars qw/$opt_l $opt_e $opt_r $opt_s/;
 
 $opt_l = 'unknown';
 getopts('l:e:r:s');
 
+our $SHARED_HOME = File::ShareDir::dist_dir('Text-SRT-Align'); 
 
 my $PAUSETHR1 = 1;       # > 1 second --> most probably new sentence
 my $PAUSETHR2 = 3;       # > 3 second --> definitely new sentence
@@ -49,7 +50,7 @@ my %SPLIT_AT_TIMEFRAME = (
 
 ## read (non-breaking) abbreviations (if the file exists)
 my %NONBREAKING=();
-read_non_breaking($Bin.'/share/nonbreaking_prefix.'.$opt_l,\%NONBREAKING);
+read_non_breaking($SHARED_HOME.'/nonbreaking_prefix.'.$opt_l,\%NONBREAKING);
 
 
 my $enc = $opt_e || LangEncoding($opt_l);
@@ -745,6 +746,7 @@ sub fix_eng_ocr_errors{
     $line=~s/I(ove[d\s])/l$1/gs;            # Ioved
     $line=~s/llke/like/gs;                  # llke --> like
     $line=~s/([a-zA-Z])I([^I\sl])/$1l$2/gs; # onIy, AIfredo
+    $line=~s/([a-zA-Z])\'il/$1\'ll/gs;      # we'il, I'il ...
     return $line;
 }
 
