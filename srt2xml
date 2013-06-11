@@ -527,13 +527,10 @@ sub print_more_chinese_tokens{
     @tok = split(//,$string) unless (@tok);
 
     foreach my $t (@tok){
-	next unless ($t=~/\S/);
 	$wid++;
-
 	$t=~s/&/&amp;/g;
 	$t=~s/</&lt;/g;
 	$t=~s/>/&gt;/g;
-
 	print "      <w id=\"$sid.$wid\">",$t,"</w>\n";
     }
     return ($wid,$string);
