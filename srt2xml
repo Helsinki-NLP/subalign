@@ -19,6 +19,7 @@ use FindBin qw($Bin);
 use Encode;
 use File::BOM qw( :all );
 use File::ShareDir;
+use Lingua::ZH::Segmenter qw/:all/;
 
 use vars qw/$opt_l $opt_e $opt_r $opt_s/;
 
@@ -500,37 +501,40 @@ sub print_tokens{
 
 sub print_chinese_tokens{
     my ($string,$sid,$wid)=@_;
+    chomp($string);
 
-    ## segmenter works with big5 coded strings ....
-    my $big5 = Encode::encode( 'big5', $string );
+    # find XML tags (TODO: is this save enough?)
+    while ($string=~s/^(.*?)(\<.*?\>)//){
+	my ($str,$tag) = ($1,$2);
+	if ($str){
+	    my $new_string='';
+	    ($wid,$new_string) = print_more_chinese_tokens($str,$sid,$wid);
+	}
+	print '     '.$tag,"\n";
+    }
+    if ($string){
+	print_more_chinese_tokens($string,$sid,$wid);
+    }
+}
 
-    my $seg = segmentline($big5);
-    my @tok = split(/\s+/,$seg);
+sub print_more_chinese_tokens{
+    my ($string,$sid,$wid)=@_;
+
+    my @tok = ();
+
+    $string = Encode::decode( 'utf8', $string );
+    @tok = segmentline($string);
+    @tok = split(//,$string) unless (@tok);
+
     foreach my $t (@tok){
-	next if not $t;
+	next unless ($t=~/\S/);
 	$wid++;
+
 	$t=~s/&/&amp;/g;
 	$t=~s/</&lt;/g;
 	$t=~s/>/&gt;/g;
 
-	## decode from big5
-	my $t = Encode::decode( 'big5', $t );
-
-	my $pos = index($string,$t);  # find the chunk
-	if ($pos>0){                  # if there's something before chunk
-	    my $before = substr($string,0,$pos);
-	    if ($before=~/\S/){
-		$wid++;
-		print "      <w id=\"$sid.$wid\">",$before,"</w>\n";
-	    }
-	}
-	$string = substr($string,$pos+length($t));
-
 	print "      <w id=\"$sid.$wid\">",$t,"</w>\n";
-    }
-    if ($string=~/\S/){
-	$wid++;
-	print "      <w id=\"$sid.$wid\">",$string,"</w>\n";
     }
     return ($wid,$string);
 }
