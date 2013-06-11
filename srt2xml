@@ -16,10 +16,16 @@ use strict;
 use Getopt::Std;
 use IPC::Open3;
 use FindBin qw($Bin);
-use Encode;
 use File::BOM qw( :all );
 use File::ShareDir;
 use Lingua::ZH::Segmenter qw/:all/;
+
+use Encode qw(decode encode);
+use Encode::Locale;
+Encode::Locale::decode_argv;
+use open qw(:std :locale);
+
+
 
 use vars qw/$opt_l $opt_e $opt_r $opt_s/;
 
@@ -521,8 +527,6 @@ sub print_more_chinese_tokens{
     my ($string,$sid,$wid)=@_;
 
     my @tok = ();
-
-    $string = Encode::decode( 'utf8', $string );
     @tok = segmentline($string);
     @tok = split(//,$string) unless (@tok);
 
