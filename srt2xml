@@ -25,7 +25,7 @@ use Encode::Locale;
 Encode::Locale::decode_argv;
 use open qw(:std :locale);
 
-use Locale::Codes::Language;
+use Locale::Codes::Language 3.26;
 
 
 use vars qw/$opt_l $opt_e $opt_r $opt_s/;
@@ -35,9 +35,7 @@ getopts('l:e:r:s');
 
 # make a three-letter language code
 if (length($opt_l) == 2){
-    $opt_l = language_code2code($opt_l, 
-				LOCALE_LANG_ALPHA_2,
-				LOCALE_LANG_ALPHA_3);
+    $opt_l = language_code2code($opt_l, 'alpha-2', 'alpha-3');
 }
 
 
@@ -71,9 +69,7 @@ my %NONBREAKING=();
 read_non_breaking($SHARED_HOME.'/nonbreaking_prefix.'.$opt_l,\%NONBREAKING);
 eval{
     my $SHARED_UPLUG = File::ShareDir::dist_dir('Uplug2');
-    my $LangID = language_code2code($opt_l, 
-				    LOCALE_LANG_ALPHA_3,
-				    LOCALE_LANG_ALPHA_2);
+    my $LangID = language_code2code($opt_l, 'alpha-2', 'alpha-3');
     read_non_breaking($SHARED_UPLUG.
 		      '/lang/nonbreaking_prefixes/nonbreaking_prefix.'.
 		      $LangID,
