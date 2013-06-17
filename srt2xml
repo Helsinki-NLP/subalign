@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 #-*-perl-*-
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+#-*-perl-*-
 #
 # convert srt files (movie subtitles) to tokenized XML (utf8)
 # (very simple tokenization & sentence splitting)
@@ -18,13 +22,7 @@ use IPC::Open3;
 use FindBin qw($Bin);
 use File::BOM qw( :all );
 use File::ShareDir;
-use Lingua::ZH::Segmenter qw/:all/;
-
 use Encode qw(decode encode);
-use Encode::Locale;
-Encode::Locale::decode_argv;
-use open qw(:std :locale);
-
 use Locale::Codes::Language 3.26;
 
 
@@ -38,7 +36,6 @@ if (length($opt_l) == 2){
     $opt_l = language_code2code($opt_l, 'alpha-2', 'alpha-3');
 }
 
-
 our $SHARED_HOME = File::ShareDir::dist_dir('Text-SRT-Align'); 
 
 my $PAUSETHR1 = 1;       # > 1 second --> most probably new sentence
@@ -46,7 +43,7 @@ my $PAUSETHR2 = 3;       # > 3 second --> definitely new sentence
 
 
 # for some languages: always split sentences at new time frames
-# (because we know too little about their writing system ....)
+# (because we have no good sentence splitter implemented for them)
 
 my %SPLIT_AT_TIMEFRAME = (
     'heb' => 1,
@@ -76,6 +73,26 @@ eval{
 		      \%NONBREAKING);
 };
 
+
+# For Chinese: need text segmentation
+#
+# old way: require this module (but it's a non-standard one!)
+# use Lingua::ZH::Segmenter qw/:all/;
+#
+# new way: use this module only if it is available (otherwise split on characters)
+if ($opt_l=~/^(chi|zho)$/){
+    eval{
+	require Lingua::ZH::Segmenter;
+	Lingua::ZH::Segmenter->import(':all');
+    };
+    if ($@){
+	eval { sub segmentline{ return split(//,$_[0]); } };
+    }
+}
+
+use Encode::Locale;
+# Encode::Locale::decode_argv;
+use open qw(:std :locale);
 
 
 my $enc = $opt_e || LangEncoding($opt_l);
@@ -594,6 +611,11 @@ sub tokenize{
     $string=~s/<(\/?[ib])>/ [$1] /gs;
     $string=~s/<(\/?font[^>]*?)>/ [$1] /gs;
 
+    # a little hack to treat contractions later:
+    # replace various apostrophes with one that does not count as punctuation
+    # (to keep it together for later splitting - see below)
+    $string=~s/(\P{P})'(\P{P})/$1´$2/gs;
+
     # \p{P} ==> punctuations
     # \P{P} ==> non-punctuations
 
@@ -608,6 +630,23 @@ sub tokenize{
     # (use negative look-ahead for that!)
 
     $string=~s/(\p{P})(?!\1)/$1 $2/gs;
+
+    # TODO: check if this causes a lot of mistakes ....
+    # TODO: is it OK to normalize to use ' only?
+    # continue treating contractions:
+    # - for English: contraction is always the second part (are there exceptions?)
+    if ($opt_l eq 'eng'){
+      $string=~s/(\P{P})(['`´])(\P{P})/$1 '$3/gs;
+    }
+    # - for French: contraction is always the first part (are there exceptions?)
+    elsif ($opt_l eq 'fre'){
+      $string=~s/(\P{P})(['`´])(\P{P})/$1' $3/gs;
+    }
+    # - for other languages: contraction is the shorter part (is that a good heuristics)
+    else{
+      $string=~s/(\A|\s|\p{P})(\p{L}+)(['`´])(\p{L}+)(\Z|\s|\p{P})/(length($2) >= length($4))?"$1$2 '$4$5":"$1$2' $4$5"/egs;
+    }
+
 
     # delete multiple spaces
     $string=~s/\s+/ /;
