@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #-*-perl-*-
 #
 # sentence aligner for subtitle files based on aligning time intervals
@@ -97,7 +97,7 @@ L<https://bitbucket.org/tiedemann/subalign>.
 
 =head1 SEE ALSO
 
-More inormation can be found in L<Text::SRT::Align>
+More information can be found in L<Text::SRT::Align>
 
 =head1 LICENSE AND COPYRIGHT
 

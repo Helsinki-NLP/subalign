@@ -1,8 +1,4 @@
-#!/usr/bin/perl
-#-*-perl-*-
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!/usr/bin/env perl
 #-*-perl-*-
 #
 # convert srt files (movie subtitles) to tokenized XML (utf8)
@@ -14,8 +10,41 @@ eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
 # -r file  ....... raw xml output file (without tokenizations)
 # -s ............. always start a new sentence at new time frames
 
+#
+# 
+#
+
+=encoding UTF-8
+
+=head1 NAME
+
+srt2xml - script for converting SRT-files (subtitles) to tokenized XML
+
+=head1 USAGE
+
+ srt2xml [OPTIONS] < input.srt > output.xml
+
+=head1 OPTIONS
+
+ -e encoding ......... specify the character encoding of the SRT file
+ -l lang-id .......... use non-breaking prefixes for the given language
+ -r filename ......... save an untokenized version in <filename>
+ -s .................. always start a new sentence at each time frame
+
+=head1 DESCRIPTION
+
+This script detects sentence boundaries and tokenizes the text in given SRT movie subtitle files and creates XML output.
+
+=head1 TODO
+
+Automatic detection of character encodings.
+
+=cut 
+
 
 use strict;
+
+use open IN => ':bytes';
 
 use Getopt::Std;
 use IPC::Open3;
@@ -65,7 +94,7 @@ my %SPLIT_AT_TIMEFRAME = (
 my %NONBREAKING=();
 read_non_breaking($SHARED_HOME.'/nonbreaking_prefix.'.$opt_l,\%NONBREAKING);
 eval{
-    my $SHARED_UPLUG = File::ShareDir::dist_dir('Uplug2');
+    my $SHARED_UPLUG = File::ShareDir::dist_dir('Uplug');
     my $LangID = language_code2code($opt_l, 'alpha-2', 'alpha-3');
     read_non_breaking($SHARED_UPLUG.
 		      '/lang/nonbreaking_prefixes/nonbreaking_prefix.'.
@@ -97,7 +126,6 @@ use open qw(:std :locale);
 
 my $enc = $opt_e || LangEncoding($opt_l);
 
-# binmode(STDIN,':encoding(iso-8859-1)');
 # binmode(STDIN,":encoding($enc)");
 binmode(STDIN);
 binmode(STDOUT,':encoding(utf8)');
@@ -152,10 +180,6 @@ my @closedtags=();
 my $first=1;
 
 while (my $line = <>){
-
-    if ($line=~/Dieses Thema/){
-	print '';
-    }
 
     # check if the first line has a BOM
     # --~ try to detect encoding!
@@ -845,7 +869,8 @@ sub read_non_breaking{
 }
 
 
-## get the appropriate language code for a given language (iso639-3)
+# default character encodings for some languages
+# (TODO: this is awful and should be removed!!!)
 
 sub LangEncoding{
     my $lang = shift;
@@ -881,3 +906,52 @@ sub LangEncoding{
 }
 
 
+
+
+__END__
+
+=head1 AUTHOR
+
+Jörg Tiedemann, L<https://bitbucket.org/tiedemann>
+
+=head1 BUGS AND SUPPORT
+
+Please report any bugs or feature requests to
+L<https://bitbucket.org/tiedemann/subalign>.
+
+=head1 SEE ALSO
+
+Check L<Text::SRT::Align> and L<srtalign> for the alignment of translated movie subtitles.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright 2013 Jörg Tiedemann.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with this program.  If not, see L<http://www.gnu.org/licenses/>.
+
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+=cut

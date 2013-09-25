@@ -858,8 +858,8 @@ sub FindWordMatches{
 		    return ($s,$t);
 		}
 	    }
-	    my $s = $srcstart+$i+$d;
-	    my $t = $trgstart+$i;
+	    $s = $srcstart+$i+$d;
+	    $t = $trgstart+$i;
 	    if ($s <= $srcend && $t <= $trgend){
 		if (find_match($src->[$s],$trg->[$t])){
 		    foreach ($srcstart..$s){$src->[$_]=undef;}
