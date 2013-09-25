@@ -1,0 +1,10 @@
+
+v 0.2
+
+- added option for specifying source and target language in srtalign
+- use global dictionaries and best-align mode if source and target language are given
+- added test for srtalign
+
+v 0.1
+
+- initial release

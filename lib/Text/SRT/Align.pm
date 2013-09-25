@@ -61,6 +61,9 @@ use strict;
 
 use XML::Parser;
 use IO::File;
+use File::ShareDir qw/dist_dir/;
+use Locale::Codes::Language 3.26;
+
 
 use Exporter 'import';
 our @EXPORT_OK   = qw(align print_ces);
@@ -190,6 +193,29 @@ sub align{
     # (will be used again if align is called multiple times)
     if ($USE_DICTIONARY){
 	&ReadDictionary(\%DIC,$USE_DICTIONARY);
+    }
+    elsif ($options{SOURCE_LANG} && $options{TARGET_LANG}){
+
+	# make a three-letter language code
+	if (length($options{SOURCE_LANG}) == 2){
+	    $options{SOURCE_LANG} = language_code2code($options{SOURCE_LANG}, 'alpha-2', 'alpha-3');
+	}
+	if (length($options{TARGET_LANG}) == 2){
+	    $options{TARGET_LANG} = language_code2code($options{TARGET_LANG}, 'alpha-2', 'alpha-3');
+	}
+
+	my $SharedHome = &dist_dir('Text-SRT-Align');
+	if (-e "$SharedHome/dic/$options{SOURCE_LANG}-$options{TARGET_LANG}"){
+	    $USE_DICTIONARY = "$SharedHome/dic/$options{SOURCE_LANG}-$options{TARGET_LANG}";
+	    &ReadDictionary(\%DIC,$USE_DICTIONARY);
+	    $options{BEST_ALIGN} = 1;
+	}
+	# inverse dictionary
+	if (-e "$SharedHome/dic/$options{TARGET_LANG}-$options{SOURCE_LANG}"){
+	    $USE_DICTIONARY = "$SharedHome/dic/$options{TARGET_LANG}-$options{SOURCE_LANG}";
+	    &ReadDictionary(\%DIC,$USE_DICTIONARY,1);
+	    $options{BEST_ALIGN} = 1;
+	}
     }
 
     if (! -e $srcfile){$srcfile.='.gz';}
@@ -580,7 +606,7 @@ sub overlap{
 
 
 sub ReadDictionary{
-    my ($dic,$file)=@_;
+    my ($dic,$file,$inverse)=@_;
     if (-e $file){
 	if ($file=~/\.gz$/){
 	    open DIC,"gzip -cd < $file |" || 
@@ -593,7 +619,7 @@ sub ReadDictionary{
 	while (<DIC>){
 	    chomp;
 	    my ($src,$trg) = split(/\s/);
-	    $$dic{$src}{$trg}++;
+	    $inverse ? $$dic{$trg}{$src}++ : $$dic{$src}{$trg}++;
 	}
     }
 }

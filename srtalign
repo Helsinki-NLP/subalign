@@ -17,22 +17,25 @@ srtalign - align movie subtitles based on time overlaps
 
 =head1 OPTIONS
 
- -c score ............ use cognates with LCSR>=score
- -r score-range ...... use cognates in a certain range 1..score and take best
- -l length ........... set minimal length of cognates (if used)
- -i len .............. use identical strings with length>=len
- -w size ............. set size for sliding window
- -d dic .............. use dictionary in file 'dic'
- -u .................. cognates/identicals that start with upper case only
- -r char_set ......... define a set of characters to be used for matching
- -q .................. normalize length scores with (current) word frequencies
- -b .................. use "best" alignment (least empty alignments)
- -p nr ............... stop after <nr> candidates (when using -b)
- -m MAX .............. in "best" alignment: use only MAX first & MAX last
-                       (default = 10; 0 = all)
- -f uplug-conf-file .. use fallback aligner if necessary
- -v .................. verbose output
+ -S source-lang . source language ID
+ -T target-lang . target language ID
+ -c score ....... use cognates with LCSR>=score
+ -r score-range . use cognates in a certain range 1..score and take best
+ -l length ...... set minimal length of cognates (if used)
+ -i len ......... use identical strings with length>=len
+ -w size ........ set size for sliding window
+ -d dic ......... use dictionary in file 'dic'
+ -u ............. cognates/identicals that start with upper case only
+ -r char_set .... define a set of characters to be used for matching
+ -q ............. normalize length scores with (current) word frequencies
+ -b ............. use "best" alignment (least empty alignments)
+ -p nr .......... stop after <nr> candidates (when using -b)
+ -m MAX ......... in "best" alignment: use only MAX first & MAX last
+                  (default = 10; 0 = all)
+ -f uplug-conf .. use fallback aligner if necessary
+ -v ............. verbose output
 
+The aligner uses the installed dictionaries if source language (-S) AND target language (-T) are given AND a dictionary for the given language pair is installed on the system (in the shared dir of the Text::SRT::Align package). If a dictionary is found it also assumes the best-align-mode (usually set by -b)
 
 Cognates/identicals are used to set time ratio + time offset!
 They define reference points that will be used to compute 
@@ -57,15 +60,17 @@ use Getopt::Std;
 use Text::SRT::Align qw/:all/;
 
 use vars qw($opt_b $opt_l $opt_c $opt_w $opt_d $opt_i $opt_v $opt_u $opt_h 
-	    $opt_s $opt_t $opt_q $opt_f $opt_r $opt_m);
+	    $opt_s $opt_t $opt_q $opt_f $opt_r $opt_m $opt_S $opt_T);
 
-getopts('c:w:l:i:d:vuh:s:t:qbf:r:m:I');
+getopts('c:w:l:i:d:vuh:s:t:qbf:r:m:IS:T:');
 
 my $srcfile = shift(@ARGV);
 my $trgfile = shift(@ARGV);
 my @alignments = ();
 
 my $score = &align($srcfile,$trgfile,\@alignments,
+		   SOURCE_LANG => $opt_S,      # setting source and target language enables
+		   TARGET_LANG => $opt_T,      # dic-lookup & also sets BEST_ALIGN (!!)
 		   FALLBACK => $opt_f,
 		   VERBOSE => $opt_v,
 		   BEST_ALIGN => $opt_b,
