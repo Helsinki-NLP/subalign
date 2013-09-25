@@ -43,8 +43,7 @@ Automatic detection of character encodings.
 
 
 use strict;
-
-use open IN => ':bytes';
+use utf8;
 
 use Getopt::Std;
 use IPC::Open3;
@@ -153,8 +152,8 @@ my $s_ended = 0;
 ##
 ## these RE's are not used at all ...
 ##
-#my $s_start = '([\"\']?[\¿\¡\p{Lu}])';
-#my $s_start_maybe = '(\-?\s*[\"\'\¿\¡]?[\p{N}\p{Ps}])';
+#my $s_start = '([\"\']?[\Â¿\Â¡\p{Lu}])';
+#my $s_start_maybe = '(\-?\s*[\"\'\Â¿\Â¡]?[\p{N}\p{Ps}])';
 #my $s_end = "([^\.]\.[\"\']?|[\.\!\?\:][\"\']?)";
 #my $s_end_maybe = "([^\.]\.[\"\'\]\}\)]?\-?\s*|[\.\!\?\:][\"\'\]\}\)]?\-?\s*)";
 
@@ -268,7 +267,7 @@ while (my $line = <>){
 		$wid=0;
 	    }
 
-	    elsif ($plain=~/^\s*([\"\'\[]?|[\*\#\']*\s*)[\¿\¡\p{Lu}l]/){
+	    elsif ($plain=~/^\s*([\"\'\[]?|[\*\#\']*\s*)[\Â¿\Â¡\p{Lu}l]/){
 		closetags();
 		print "  </s>\n";
 		print "  <s id=\"$sid\">\n";
@@ -351,12 +350,12 @@ while (my $line = <>){
 	    my $sentence_boundary = 0;
 	    if ($plain_before=~/([^.]\.|[!?:])[\'\"]?\s*$/){
 #		if ($plain_after=~/^\s+\-?\s*[\"\']?[\p{N}\p{Ps}\p{Lu}]/){
-		if ($plain_after=~/^\s+[\-\*\#]*\s*[\¿\¡\"\'\[]?[\p{N}\p{Ps}\p{Lu}]/){
+		if ($plain_after=~/^\s+[\-\*\#]*\s*[\Â¿\Â¡\"\'\[]?[\p{N}\p{Ps}\p{Lu}]/){
 		    $sentence_boundary = 1;
 		}
 	    }
 	    elsif ($plain_before=~/([.!?:])[\"\'\]\}\)]?\-?\s*$/){
-		if ($plain_after=~/^\s+[\"\']?[\¿\¡\p{Lu}]/){
+		if ($plain_after=~/^\s+[\"\']?[\Â¿\Â¡\p{Lu}]/){
 		    $sentence_boundary = 1;
 		}
 	    }
@@ -638,7 +637,7 @@ sub tokenize{
     # a little hack to treat contractions later:
     # replace various apostrophes with one that does not count as punctuation
     # (to keep it together for later splitting - see below)
-    $string=~s/(\P{P})'(\P{P})/$1´$2/gs;
+    $string=~s/(\P{P})'(\P{P})/$1Â´$2/gs;
 
     # \p{P} ==> punctuations
     # \P{P} ==> non-punctuations
@@ -660,15 +659,15 @@ sub tokenize{
     # continue treating contractions:
     # - for English: contraction is always the second part (are there exceptions?)
     if ($opt_l eq 'eng'){
-      $string=~s/(\P{P})(['`´])(\P{P})/$1 '$3/gs;
+      $string=~s/(\P{P})(['`Â´])(\P{P})/$1 '$3/gs;
     }
     # - for French: contraction is always the first part (are there exceptions?)
     elsif ($opt_l eq 'fre'){
-      $string=~s/(\P{P})(['`´])(\P{P})/$1' $3/gs;
+      $string=~s/(\P{P})(['`Â´])(\P{P})/$1' $3/gs;
     }
     # - for other languages: contraction is the shorter part (is that a good heuristics)
     else{
-      $string=~s/(\A|\s|\p{P})(\p{L}+)(['`´])(\p{L}+)(\Z|\s|\p{P})/(length($2) >= length($4))?"$1$2 '$4$5":"$1$2' $4$5"/egs;
+      $string=~s/(\A|\s|\p{P})(\p{L}+)(['`Â´])(\p{L}+)(\Z|\s|\p{P})/(length($2) >= length($4))?"$1$2 '$4$5":"$1$2' $4$5"/egs;
     }
 
 
@@ -912,7 +911,7 @@ __END__
 
 =head1 AUTHOR
 
-Jörg Tiedemann, L<https://bitbucket.org/tiedemann>
+JÃ¶rg Tiedemann, L<https://bitbucket.org/tiedemann>
 
 =head1 BUGS AND SUPPORT
 
@@ -925,7 +924,7 @@ Check L<Text::SRT::Align> and L<srtalign> for the alignment of translated movie 
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2013 Jörg Tiedemann.
+Copyright 2013 JÃ¶rg Tiedemann.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published
