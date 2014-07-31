@@ -195,27 +195,9 @@ sub align{
 	&ReadDictionary(\%DIC,$USE_DICTIONARY);
     }
     elsif ($options{SOURCE_LANG} && $options{TARGET_LANG}){
-
-	# make a three-letter language code
-	if (length($options{SOURCE_LANG}) == 2){
-	    $options{SOURCE_LANG} = language_code2code($options{SOURCE_LANG}, 'alpha-2', 'alpha-3');
-	}
-	if (length($options{TARGET_LANG}) == 2){
-	    $options{TARGET_LANG} = language_code2code($options{TARGET_LANG}, 'alpha-2', 'alpha-3');
-	}
-
-	my $SharedHome = &dist_dir('Text-SRT-Align');
-	if (-e "$SharedHome/dic/$options{SOURCE_LANG}-$options{TARGET_LANG}"){
-	    $USE_DICTIONARY = "$SharedHome/dic/$options{SOURCE_LANG}-$options{TARGET_LANG}";
-	    &ReadDictionary(\%DIC,$USE_DICTIONARY);
-	    $options{BEST_ALIGN} = 1;
-	}
-	# inverse dictionary
-	if (-e "$SharedHome/dic/$options{TARGET_LANG}-$options{SOURCE_LANG}"){
-	    $USE_DICTIONARY = "$SharedHome/dic/$options{TARGET_LANG}-$options{SOURCE_LANG}";
-	    &ReadDictionary(\%DIC,$USE_DICTIONARY,1);
-	    $options{BEST_ALIGN} = 1;
-	}
+	$options{BEST_ALIGN} = 
+	    &initialize_dictionary( $options{SOURCE_LANG},
+				    $options{TARGET_LANG} );
     }
 
     if (! -e $srcfile){$srcfile.='.gz';}
@@ -266,15 +248,54 @@ sub align{
 
     print STDERR "done!\n" if ($VERBOSE);
     if ($baseScore){
-	print STDERR "ratio = $score ($baseScore)\n";
+	print STDERR "ratio = $score ($baseScore)\n" if ($VERBOSE);
     }
     else {
-	print STDERR "ratio = $score\n";
+	print STDERR "ratio = $score\n" if ($VERBOSE);
     }
 
     return $score;
 }
 
+
+
+=head2 C<initialize_dictionary( $srclang, $trglang )>
+
+Load the provided dictionary if it exists for the given language pair.
+Return 1 if it exists and could be loaded. Return 0 otherwise.
+
+=cut
+
+
+## NOTE: this resets the dictionary and removes existing entries in %DIC
+## but only if the shared dic exists!
+
+sub initialize_dictionary{
+    my ($srclang,$trglang) = @_;
+
+    # make a three-letter language code
+    if (length($srclang) == 2){
+	$srclang = language_code2code($srclang, 'alpha-2', 'alpha-3');
+    }
+    if (length($trglang) == 2){
+	$trglang = language_code2code($trglang, 'alpha-2', 'alpha-3');
+    }
+
+    my $SharedHome = &dist_dir('Text-SRT-Align');
+    if (-e "$SharedHome/dic/$srclang-$trglang"){
+	%DIC=();
+	$USE_DICTIONARY = "$SharedHome/dic/$srclang-$trglang";
+	&ReadDictionary(\%DIC,$USE_DICTIONARY);
+	return 1 if (keys %DIC);
+    }
+    # inverse dictionary
+    if (-e "$SharedHome/dic/$trglang-$srclang"){
+	%DIC=();
+	$USE_DICTIONARY = "$SharedHome/dic/$trglang-$srclang";
+	&ReadDictionary(\%DIC,$USE_DICTIONARY,1);
+	return 1 if (keys %DIC);
+    }
+}
 
 =head2 C<print_ces( $srcfile, $trgfile, \@alignments )>
 
@@ -1413,6 +1434,135 @@ sub set_sent_times{
     }
 
 }
+
+
+
+=head2 C<time_overlap_ratio( \@timeframes1, \@timeframes2 )>
+
+Compute the proportion of overlapping in time between two sets of times frames.
+Returns overlap-ratio = common-time / ( common-time + different-time )
+
+=cut
+
+
+sub time_overlap_ratio{
+    my ($frames1,$frames2)=@_;
+    my $common=0;
+    my $diff=0;
+
+    my @time1=@{$frames1};
+    my @time2=@{$frames2};
+
+    my $start1=shift(@time1);
+    my $end1=shift(@time1);
+
+    my $start2=shift(@time2);
+    my $end2=shift(@time2);
+
+    ## TODO: should we skip extra frames in the beginning?
+    ## (need to do do that here in that case)
+
+    while ($end1 && $end2){
+
+	# sub1 frame is completely before sub2 frame
+	if ($end1 < $start2){
+	    $diff+=($end1-$start1);
+	    $start1=shift(@time1);
+	    $end1=shift(@time1);
+	    next;
+	}
+	# sub2 frame is completely before sub1 frame
+	if ($end2 && ($end2 < $start1)){
+	    $diff+=($end2-$start2);
+	    $start2=shift(@time2);
+	    $end2=shift(@time2);
+	    next;
+	}
+
+	my $CommonStart;
+	# sub1 frame starts before sub2 frame
+	if ($start1 < $start2){
+	    $diff+=($start2-$start1);
+	    $CommonStart=$start2;
+	}
+	# sub2 frame starts before sub1 frame
+	else{
+	    $diff+=($start1-$start2);
+	    $CommonStart=$start1;
+	}
+
+        # sub1 frame ends before sub2
+	if ($end1 < $end2){
+	    $common+=($end1-$CommonStart);
+	    $start2=$end1;         # move start2 to end of sub1 frame
+	    $start1=shift(@time1);
+	    $end1=shift(@time1);
+	}
+	# sub2 frame ends before sub1
+	else{
+	    $common+=($end2-$CommonStart);
+	    $start1=$end2;         # move start1 to end of sub2 frame
+	    $start2=shift(@time2);
+	    $end2=shift(@time2);
+	}
+    }
+
+    ## TODO: should we skip extra frames at the end?
+
+    # remaining sub2 frames
+    if (!$start1){
+	while ($start2 && $end2){
+	    $diff+=($end2-$start2);
+	    $start2=shift(@time2);
+	    $end2=shift(@time2);
+	}
+    }
+
+    # remaining sub1 frames
+    if (!$start2){
+	while ($start1 && $end1){
+	    $diff+=($end1-$start1);
+	    $start1=shift(@time1);
+	    $end1=shift(@time1);
+	}
+    }
+    if ($common || $diff){
+	return $common/($common+$diff);
+    }
+    return 0;
+}
+
+
+=head2 C<read_time_frames( $xmlfile, \@timeframes )>
+
+Read through a subtitle file and return all time frames
+
+=cut
+
+
+sub read_time_frames{
+    my $file=shift;
+    my $time=shift;
+
+    if ($file=~/\.gz$/){
+	open F,"gzip -cd < $file |" || die "cannot open $file!\n";
+    }
+    else{
+	open F, "<$file" || die "cannot open $file!\n";
+    }
+    while (<F>){
+	if (/\<time.*value\=\"(.*?)\"/){
+	    my $sec = time2sec($1);
+	    ## sanityt check: time should always increase!
+	    if ((!@{$time}) || ($$time[-1]<$sec)){
+		push(@$time,time2sec($1));
+	    }
+	}
+    }
+    close F;
+    print STDERR "." if ($VERBOSE);
+}
+
 
 
 

@@ -1,8 +1,11 @@
 
+- added function for computing time-overlap-ratio
+
 v 0.2
 
 - added option for specifying source and target language in srtalign
-- use global dictionaries and best-align mode if source and target language are given
+- use global dictionaries and best-align mode 
+  if source and target language are given
 - added test for srtalign
 
 v 0.1
