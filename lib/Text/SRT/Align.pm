@@ -961,6 +961,8 @@ sub ReadNextSentence{
 	    return 0;
 	}
 	else{
+	    # some additional cleanup, see: http://stackoverflow.com/questions/1016910/how-can-i-strip-invalid-xml-characters-from-strings-in-perl
+	    $line =~ tr/\e\x00-\x08\x0A\x0B\x0C\x0E-\x19//d;
 	    $parser->parse_more($line);      # else: parse line
 	}
     }
@@ -1246,36 +1248,141 @@ sub cognates{
 
 
 sub LCS {
+    my ($srcstr,$trgstr)=@_;
+
+    my ($src,$trg) = ([],[]);
+    @{$src}=split(//,$src);		# split string into char
+    @{$trg}=split(//,$trg);		# split string into char
+
+    my (@l,$i,$j);
+    foreach my $i (0..$#{$src}){ $l[$i][0]=0; }
+    foreach my $i (0..$#{$trg}){ $l[0][$i]=0; }
+
+    for $i (1..@{$src}){
+	for $j (1..@{$trg}){
+	    if ($$src[$i-1] eq $$trg[$j-1]){
+		if ($l[$i][$j-1] > $l[$i-1][$j-1]+1){
+		    if ($l[$i-1][$j] > $l[$i][$j-1]){
+			$l[$i][$j]=$l[$i-1][$j];
+		    }
+		    else{
+			$l[$i][$j]=$l[$i][$j-1];
+		    }
+		}
+		elsif ($l[$i-1][$j] > $l[$i-1][$j-1]+1){
+		    $l[$i][$j]=$l[$i-1][$j];
+		}
+		else{
+		    $l[$i][$j]=$l[$i-1][$j-1]+1;
+		}
+	    }
+	    else{
+		if ($l[$i][$j-1] > $l[$i-1][$j-1]){
+		    if ($l[$i-1][$j] > $l[$i][$j-1]){
+			$l[$i][$j]=$l[$i-1][$j];
+		    }
+		    else{
+			$l[$i][$j]=$l[$i][$j-1];
+		    }
+		}
+		elsif ($l[$i-1][$j] > $l[$i-1][$j-1]){
+		    $l[$i][$j]=$l[$i-1][$j];
+		}
+		else{
+		    $l[$i][$j]=$l[$i-1][$j-1];
+		}
+	    }
+	}
+    }
+    return $l[-1][-1];
+}
+
+
+
+sub LCS {
     my ($src,$trg)=@_;
     my (@l,$i,$j);
     my @src_let=split(//,$src);		# split string into char
     my @trg_let=split(//,$trg);
     unshift (@src_let,'');
     unshift (@trg_let,'');
-  for ($i=0;$i<=$#src_let;$i++){                # initialize the matrix
-      $l[$i][0]=0;
-  }
-  for ($i=0;$i<=$#trg_let;$i++){
-      $l[0][$i]=0;
-  }                                                       # weight function is
+    for ($i=0;$i<=$#src_let;$i++){                # initialize the matrix
+	$l[$i][0]=0;
+    }
+    for ($i=0;$i<=$#trg_let;$i++){
+	$l[0][$i]=0;
+    }
 
     for $i (1..$#src_let){
 	for $j (1..$#trg_let){
 	    if ($src_let[$i] eq $trg_let[$j]){
-		$l[$i][$j]=$l[$i-1][$j-1]+1;
-	    }
-	    else{
-		if ($l[$i][$j-1]>$l[$i-1][$j]){
-		    $l[$i][$j]=$l[$i][$j-1];
+		if ($l[$i][$j-1] > $l[$i-1][$j-1]+1){
+		    if ($l[$i-1][$j] > $l[$i][$j-1]){
+			$l[$i][$j]=$l[$i-1][$j];
+		    }
+		    else{
+			$l[$i][$j]=$l[$i][$j-1];
+		    }
+		}
+		elsif ($l[$i-1][$j] > $l[$i][$j-1]){
+			$l[$i][$j]=$l[$i-1][$j];
 		}
 		else{
-		    $l[$i][$j]=$l[$i-1][$j];
+		    $l[$i][$j]=$l[$i-1][$j-1]+1;
 		}
-	  }
+	    }
+	    else{
+		if ($l[$i][$j-1] > $l[$i-1][$j-1]){
+		    if ($l[$i-1][$j] > $l[$i][$j-1]){
+			$l[$i][$j]=$l[$i-1][$j];
+		    }
+		    else{
+			$l[$i][$j]=$l[$i][$j-1];
+		    }
+		}
+		elsif ($l[$i-1][$j] > $l[$i][$j-1]){
+			$l[$i][$j]=$l[$i-1][$j];
+		}
+		else{
+		    $l[$i][$j]=$l[$i-1][$j-1];
+		}
+	    }
 	}
     }
     return $l[$#src_let][$#trg_let];
 }
+
+# sub LCS {
+#     my ($src,$trg)=@_;
+#     my (@l,$i,$j);
+#     my @src_let=split(//,$src);		# split string into char
+#     my @trg_let=split(//,$trg);
+#     unshift (@src_let,'');
+#     unshift (@trg_let,'');
+#   for ($i=0;$i<=$#src_let;$i++){                # initialize the matrix
+#       $l[$i][0]=0;
+#   }
+#   for ($i=0;$i<=$#trg_let;$i++){
+#       $l[0][$i]=0;
+#   }                                                       # weight function is
+
+#     for $i (1..$#src_let){
+# 	for $j (1..$#trg_let){
+# 	    if ($src_let[$i] eq $trg_let[$j]){
+# 		$l[$i][$j]=$l[$i-1][$j-1]+1;
+# 	    }
+# 	    else{
+# 		if ($l[$i][$j-1]>$l[$i-1][$j]){
+# 		    $l[$i][$j]=$l[$i][$j-1];
+# 		}
+# 		else{
+# 		    $l[$i][$j]=$l[$i-1][$j];
+# 		}
+# 	  }
+# 	}
+#     }
+#     return $l[$#src_let][$#trg_let];
+# }
 
 
 

@@ -191,6 +191,9 @@ while (my $line = <>){
 
     # remove dos line endings
     $line=~s/\r\n$/\n/;
+    # some additional cleanup, see: http://stackoverflow.com/questions/1016910/how-can-i-strip-invalid-xml-characters-from-strings-in-perl
+    $line=~tr/\e\x00-\x08\x0A\x0B\x0C\x0E-\x19//d;
+
 
     if (not defined $id){
 	if ($line=~/^\s*([0-9]+)$/){
