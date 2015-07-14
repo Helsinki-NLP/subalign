@@ -86,6 +86,8 @@ my $score = &align($srcfile,$trgfile,\@alignments,
 		   MINLENGTH => $opt_l,        # minimum token length (default=5)
 		   WINDOW => $opt_w);          # window for lexical matching (default=25)
 
+print STDERR "ratio = $score\n";
+
 &print_ces($srcfile,$trgfile,\@alignments);
 
 
