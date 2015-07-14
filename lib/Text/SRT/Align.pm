@@ -223,6 +223,11 @@ sub align{
     &set_sent_times(\@srcdata);
     &set_sent_times(\@trgdata);
 
+    ## sort time frames by their starting time
+    ## (strangely ebough some subtitles are not chronogologically sorted)
+    @srcdata = &sort_time_frames(\@srcdata);
+    @trgdata = &sort_time_frames(\@trgdata);
+
     if (defined $options{HARD_BOUNDARIES}){
 	&fit_hard_boundaries($options{HARD_BOUNDARIES},\@srcdata,\@trgdata);
     }
@@ -430,6 +435,9 @@ sub cognate_align{
 	$USE_COGNATES=$c;
 	print STDERR "use c=$USE_COGNATES";
 	&parse_bitext($srcfile,$trgfile,$srcdata,$trgdata,$first,$last);
+	##
+	## TODO: Do I need to set starting time and to sort tie frames here again?
+	##
 	my @newalg=();
 	my $new=best_align($srcfile,$trgfile,
 			   $srcdata,$trgdata,
@@ -1542,6 +1550,25 @@ sub set_sent_times{
 
 }
 
+
+=head2 C<@newtimeframes = sort_time_frames( \@oldtimeframes )>
+
+Sort time frames by their starting time.
+(This is necessary because some subtitles do not list 
+the frames in chronolgical order.)
+
+=cut
+
+
+sub sort_time_frames{
+    my $sent = shift;
+    my @sorted = ();
+    foreach my $s (sort {$$sent[$a]{start} <=> $$sent[$b]{start}} 
+		   0..$#{$sent}){
+	push(@sorted,$$sent[$s]);
+    }
+    return @sorted;
+}
 
 
 =head2 C<time_overlap_ratio( \@timeframes1, \@timeframes2 )>
