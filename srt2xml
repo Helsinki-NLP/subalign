@@ -194,7 +194,6 @@ while (my $line = <>){
     # some additional cleanup, see: http://stackoverflow.com/questions/1016910/how-can-i-strip-invalid-xml-characters-from-strings-in-perl
     $line=~tr/\e\x00-\x08\x0A\x0B\x0C\x0E-\x19//d;
 
-
     if (not defined $id){
 	if ($line=~/^\s*([0-9]+)$/){
 	    $id = $1;
@@ -438,9 +437,10 @@ while (my $line = <>){
 	}
 
 	## tokenize and print remaining text
+	## (add a final space to keep spaces between tokens in raw output)
 
 	my $last_token='';
-	($wid,$last_token) = print_tokens($line,$sid-1,$wid);
+	($wid,$last_token) = print_tokens($line.' ',$sid-1,$wid);
 	# check if last token is a non-breaking one
 	# --> don't start a new sentence!
 	$last_token=~s/\.$//;
@@ -483,6 +483,7 @@ sub print_raw_string{
     $string=~s/</&lt;/g;
     $string=~s/>/&gt;/g;
     print F $string;
+#    print F $string," ";
 #    $string=~s/\s*$//;
 #    print F $string,"\n" if ($string);
 }
