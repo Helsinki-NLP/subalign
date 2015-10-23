@@ -93,6 +93,10 @@ our $USE_DICTIONARY = undef;
 our $USE_COGNATES   = undef;
 our $USE_IDENTICAL  = undef;
 
+## if 1: use the proportion of non-empty links among all links
+## instead of the ratio between non-empty and empty alignments
+our $SCORE_PROPORTION = 0;
+
 
 my %DIC     = ();
 my $srcfreq = undef;
@@ -189,6 +193,10 @@ sub align{
     $WINDOW         = $options{WINDOW} if (defined $options{WINDOW});
     $MAX_MATCHES    = $options{MAX_MATCHES} if (defined $options{MAX_MATCHES});
 
+    # scoring function
+    $SCORE_PROPORTION = $options{SCORE_PROPORTION} if (defined $options{SCORE_PROPORTION});
+
+
     # TODO: is it OK if we never reset the dictionary?
     # (will be used again if align is called multiple times)
     if ($USE_DICTIONARY){
@@ -224,7 +232,7 @@ sub align{
     &set_sent_times(\@trgdata);
 
     ## sort time frames by their starting time
-    ## (strangely ebough some subtitles are not chronogologically sorted)
+    ## (strangely enough some subtitles are not chronogologically sorted)
     @srcdata = &sort_time_frames(\@srcdata);
     @trgdata = &sort_time_frames(\@trgdata);
 
@@ -237,11 +245,19 @@ sub align{
 
     print STDERR "align sentences ... " if ($VERBOSE);
     if ($COGNATE_RANGE){
+	if ($VERBOSE){
+	    my $overlap = &time_overlap(\@srcdata,\@trgdata);
+	    print STDERR "time overlap before = $overlap\n"
+	}
 	$score = &cognate_align($srcfile,$trgfile,
 				\@srcdata,\@trgdata,
 				\%first,\%last,$alignment);
     }
     if ($options{BEST_ALIGN}){
+	if ($VERBOSE){
+	    my $overlap = &time_overlap(\@srcdata,\@trgdata);
+	    print STDERR "time overlap before = $overlap\n";
+	}
 	($score,$baseScore) = 
 	    &best_align($srcfile,$trgfile,
 			\@srcdata,\@trgdata,
@@ -251,6 +267,9 @@ sub align{
 	$score = &standard_align(\@srcdata,\@trgdata,\%first,\%last,$alignment);
     }
 
+    my $overlap = &time_overlap(\@srcdata,\@trgdata);
+    print STDERR "time overlap = $overlap\n" if ($VERBOSE);
+
     print STDERR "done!\n" if ($VERBOSE);
     if ($baseScore){
 	print STDERR "ratio = $score ($baseScore)\n" if ($VERBOSE);
@@ -259,7 +278,7 @@ sub align{
 	print STDERR "ratio = $score\n" if ($VERBOSE);
     }
 
-    return $score;
+    return wantarray ? ($score,$overlap) : $score;
 }
 
 
@@ -345,10 +364,12 @@ sub best_align{
 
     my %types;
     align_srt($srcdata,$trgdata,$alg,\%types);
-    my $bestratio = ($types{nonempty}+1)/($types{empty}+1);
+    my $bestratio = $SCORE_PROPORTION ?
+	($types{nonempty}+1) / ($types{nonempty} + $types{empty} +1) :
+	($types{nonempty}+1)/($types{empty}+1);
 
     print STDERR "\nratio = " if $VERBOSE;
-    print STDERR ($types{nonempty}+1)/($types{empty}+1) if $VERBOSE;
+    print STDERR $bestratio if $VERBOSE;
     print STDERR "\n" if $VERBOSE;
 
     my @sortfirst = sort {$$first{$b} <=> $$first{$a} } keys %{$first};
@@ -385,11 +406,14 @@ sub best_align{
 	    my %types=();
 	    my @newalg=();
 	    align_srt($srcdata,$trgdata,\@newalg,\%types);
+	    my $newratio = $SCORE_PROPORTION ?
+		($types{nonempty}+1) / ($types{nonempty} + $types{empty} +1) :
+		($types{nonempty}+1)/($types{empty}+1);
 	    print STDERR "ratio = " if $VERBOSE;
-	    print STDERR ($types{nonempty}+1)/($types{empty}+1) if $VERBOSE;
-	    if (($types{nonempty}+1)/($types{empty}+1) > $bestratio){
+	    print STDERR $newratio if $VERBOSE;
+	    if ($newratio > $bestratio){
 		@{$alg} = @newalg;
-		$bestratio = ($types{nonempty}+1)/($types{empty}+1);
+		$bestratio = $newratio;
 		print STDERR " ---> best!" if $VERBOSE;
 	    }
 	    print STDERR "\n" if $VERBOSE;
@@ -422,7 +446,10 @@ sub standard_align{
 	@{$alg} = ();
 	&align_srt($srcdata,$trgdata,$alg);
     }
-    return ($types{nonempty}+1)/($types{empty}+1);
+    my $score = $SCORE_PROPORTION ?
+	($types{nonempty}+1) / ($types{nonempty} + $types{empty} +1) :
+	($types{nonempty}+1)/($types{empty}+1);
+    return $score;
 }
 
 
@@ -1570,6 +1597,30 @@ sub sort_time_frames{
     return @sorted;
 }
 
+=head2 C<time_overlap( \@srcdata, \@trgdata )>
+
+Compute the proportion of overlapping in time between two sets of subtitles.
+Returns overlap-ratio = common-time / ( common-time + different-time )
+
+This is similar to time_overlap_ratio but uses the time frames from
+subtitle data structures that may be synchronized using lexical anchors.
+
+=cut
+
+sub time_overlap{
+    my ($srcdata,$trgdata) = @_;
+    my @srctime = ();
+    my @trgtime = ();
+    foreach (0..$#{$srcdata}){
+	push(@srctime,$$srcdata[$_]{start});
+	push(@srctime,$$srcdata[$_]{end});
+    }
+    foreach (0..$#{$trgdata}){
+	push(@trgtime,$$trgdata[$_]{start});
+	push(@trgtime,$$trgdata[$_]{end});
+    }
+    return &time_overlap_ratio(\@srctime,\@trgtime);
+}
 
 =head2 C<time_overlap_ratio( \@timeframes1, \@timeframes2 )>
 
