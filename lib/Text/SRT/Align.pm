@@ -345,7 +345,11 @@ sub print_ces{
 	if (ref($alg->[$i]->{trg}) eq 'ARRAY'){
 	    print join(' ',@{$alg->[$i]->{trg}});
 	}
-	print "\" />\n";
+	print "\" ";
+	if (exists $alg->[$i]->{overlap}){
+	    printf "overlap=\"%5.3f\" ",$alg->[$i]->{overlap};
+	}
+	print "/>\n";
     }
     print "</linkGrp>\n</cesAlign>\n";
 }
@@ -542,6 +546,7 @@ sub align_srt{
 
 	
 	my %cost=();
+	my %common=();
 
 	foreach my $ds (keys %DIST){
 	    next if $s+$ds>$#{$src};
@@ -556,6 +561,7 @@ sub align_srt{
 						    $trg->[$t]->{start},
 						    $trg->[$t+$dt]->{end});
 		$cost{"$ds-$dt"}=$not_common;
+		$common{"$ds-$dt"}=$common;
 	    }
 	}
 	    
@@ -569,6 +575,10 @@ sub align_srt{
 	    foreach (0..$dt){
 		push(@{$alg->[$idx]->{trg}},$trg->[$t+$_]->{id});
 	    }
+	    $alg->[$idx]->{common} = $common{"$ds-$dt"};
+	    $alg->[$idx]->{different} = $cost{"$ds-$dt"};
+	    $alg->[$idx]->{overlap} = $common{"$ds-$dt"} + $cost{"$ds-$dt"} ?
+		$common{"$ds-$dt"}/($common{"$ds-$dt"} + $cost{"$ds-$dt"}):0;
 	    my $key = join(':',$ds+1,$dt+1);
 	    $$types{$key}++;
 	    $$types{nonempty}++;
