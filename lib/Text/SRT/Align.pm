@@ -63,10 +63,10 @@ use XML::Parser;
 use IO::File;
 use File::ShareDir qw/dist_dir/;
 use Locale::Codes::Language 3.26;
-
+use Clone qw/clone/;
 
 use Exporter 'import';
-our @EXPORT_OK   = qw(align print_ces);
+our @EXPORT_OK   = qw(align load_lexicon initialize_lexicon print_ces);
 our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
 
@@ -98,10 +98,14 @@ our $USE_IDENTICAL  = undef;
 our $SCORE_PROPORTION = 0;
 
 
-my %DIC     = ();
-my $srcfreq = undef;
-my $trgfreq = undef;
+my %DIC          = ();
+my %LOADED_DICS  = ();
+my $srcfreq      = undef;
+my $trgfreq      = undef;
 
+## save bitexts in memory
+our $StoreXML    = 0;
+my %StoredXML    = ();
 
 ################################################################################
 
@@ -294,6 +298,11 @@ Return 1 if it exists and could be loaded. Return 0 otherwise.
 ## NOTE: this resets the dictionary and removes existing entries in %DIC
 ## but only if the shared dic exists!
 
+## alias for initialize_dictionary
+sub initialize_lexicon{
+    return initialize_dictionary(@_);
+}
+
 sub initialize_dictionary{
     my ($srclang,$trglang) = @_;
 
@@ -308,6 +317,7 @@ sub initialize_dictionary{
     my $SharedHome = &dist_dir('Text-SRT-Align');
     if (-e "$SharedHome/dic/$srclang-$trglang"){
 	%DIC=();
+	%LOADED_DICS=();
 	$USE_DICTIONARY = "$SharedHome/dic/$srclang-$trglang";
 	&ReadDictionary(\%DIC,$USE_DICTIONARY);
 	return 1 if (keys %DIC);
@@ -315,11 +325,25 @@ sub initialize_dictionary{
     # inverse dictionary
     if (-e "$SharedHome/dic/$trglang-$srclang"){
 	%DIC=();
+	%LOADED_DICS=();
 	$USE_DICTIONARY = "$SharedHome/dic/$trglang-$srclang";
 	&ReadDictionary(\%DIC,$USE_DICTIONARY,1);
 	return 1 if (keys %DIC);
     }
 }
+
+=head2 C<load_lexicon( $dicfile[, $inverse])>
+
+Load lexicon from $dicfile. Optional: inverse dictionary (reverse source and target language)
+
+=cut
+
+sub load_lexicon{
+    my ($dicfile,$inverse) = @_;
+    &ReadDictionary(\%DIC,$dicfile,$inverse);
+    return 1 if (keys %DIC);
+}
+
 
 =head2 C<print_ces( $srcfile, $trgfile, \@alignments )>
 
@@ -329,29 +353,37 @@ Print the sentence alignments in XCES Align format.
 
 
 sub print_ces{
-    my ($src,$trg,$alg)=@_;
+    my ($src,$trg,$alg,$meta,$fh)=@_;
 
-    print '<?xml version="1.0" encoding="utf-8"?>'."\n";
-    print '<!DOCTYPE cesAlign PUBLIC "-//CES//DTD XML cesAlign//EN" "">'."\n";
-    print '<cesAlign version="1.0">'."\n";
-    print "<linkGrp targType=\"s\" fromDoc=\"$src\" toDoc=\"$trg\">\n";
+    $fh = *STDOUT unless $fh;
+
+    print $fh '<?xml version="1.0" encoding="utf-8"?>'."\n";
+    print $fh '<!DOCTYPE cesAlign PUBLIC "-//CES//DTD XML cesAlign//EN" "">'."\n";
+    print $fh '<cesAlign version="1.0">'."\n";
+    print $fh "<linkGrp targType=\"s\" fromDoc=\"$src\" toDoc=\"$trg\"";
+    if (ref($meta) eq 'HASH'){
+	foreach my $k (keys %{$meta}){
+	    print $fh " $k=\"$$meta{$k}\"";
+	}
+    }
+    print $fh "\">\n";
 
     foreach my $i (0..$#{$alg}){
-	print "<link id=\"SL$i\" xtargets=\"";
+	print $fh "<link id=\"SL$i\" xtargets=\"";
 	if (ref($alg->[$i]->{src}) eq 'ARRAY'){
-	    print join(' ',@{$alg->[$i]->{src}});
+	    print $fh join(' ',@{$alg->[$i]->{src}});
 	}
-	print ';';
+	print $fh ';';
 	if (ref($alg->[$i]->{trg}) eq 'ARRAY'){
-	    print join(' ',@{$alg->[$i]->{trg}});
+	    print $fh join(' ',@{$alg->[$i]->{trg}});
 	}
-	print "\" ";
+	print $fh "\" ";
 	if (exists $alg->[$i]->{overlap}){
-	    printf "overlap=\"%5.3f\" ",$alg->[$i]->{overlap};
+	    printf $fh "overlap=\"%5.3f\" ",$alg->[$i]->{overlap};
 	}
-	print "/>\n";
+	print $fh "/>\n";
     }
-    print "</linkGrp>\n</cesAlign>\n";
+    print $fh "</linkGrp>\n</cesAlign>\n";
 }
 
 
@@ -673,6 +705,7 @@ sub overlap{
 
 sub ReadDictionary{
     my ($dic,$file,$inverse)=@_;
+    return 1 if (exists $LOADED_DICS{$file});
     if (-e $file){
 	if ($file=~/\.gz$/){
 	    open DIC,"gzip -cd < $file |" || 
@@ -687,6 +720,7 @@ sub ReadDictionary{
 	    my ($src,$trg) = split(/\s/);
 	    $inverse ? $$dic{$trg}{$src}++ : $$dic{$src}{$trg}++;
 	}
+	$LOADED_DICS{$file} = 1;
     }
 }
 
@@ -703,61 +737,101 @@ sub parse_bitext{
     my $trgfirst=[];
     my $trglast=[];
 
-    my ($src_fh,$src_ph) = init_parser($srcfile,$srcdata);
-    my ($trg_fh,$trg_ph) = init_parser($trgfile,$trgdata);
-
-    $srcfreq = $src_ph->{WORDFREQ};
-    $trgfreq = $trg_ph->{WORDFREQ};
+    print STDERR "\n" if $VERBOSE;
 
     my $src_count=0;
     my $trg_count=0;
 
-    print STDERR "\n" if $VERBOSE;
+    if ($StoreXML && (exists $StoredXML{$srcfile})){
+	# print STDERR "retrieve $srcfile ...\n";
+	@{$srcdata} = @{ clone($StoredXML{$srcfile}{data}) };
+	@{$srcfirst} = @{ clone($StoredXML{$srcfile}{first}) };
+	@{$srclast} = @{ clone($StoredXML{$srcfile}{last}) };
+	%{$srcfreq} = %{ clone($StoredXML{$srcfile}{freq}) };
+	$src_count = $StoredXML{$srcfile}{count};
+    }
+    else{
+	my ($src_fh,$src_ph) = init_parser($srcfile,$srcdata);
 
-    ## parse through source language text
-    while (&ReadNextSentence($src_fh,$src_ph)){
-#	next unless (@{$src_ph->{WORDS}});
-	if (@{$srcfirst} < $WINDOW ){
-	    my $idx = scalar @{$srcfirst};
+	$srcfreq = $src_ph->{WORDFREQ};
+
+	## parse through source language text
+	while (&ReadNextSentence($src_fh,$src_ph)){
+#	    next unless (@{$src_ph->{WORDS}});
+	    if (@{$srcfirst} < $WINDOW ){
+		my $idx = scalar @{$srcfirst};
+		if (@{$src_ph->{WORDS}}){
+		    @{$srcfirst->[$idx]} = @{$src_ph->{WORDS}->[-1]};
+		}
+		else{@{$srcfirst->[$idx]}=();}
+	    }
+	    my $idx = scalar @{$srclast};
 	    if (@{$src_ph->{WORDS}}){
-		@{$srcfirst->[$idx]} = @{$src_ph->{WORDS}->[-1]};
+		@{$srclast->[$idx]} = @{$src_ph->{WORDS}->[-1]};
+		@{$src_ph->{WORDS}->[-1]} = undef;
 	    }
-	    else{@{$srcfirst->[$idx]}=();}
+	    else{@{$srclast->[$idx]}=();}
+	    if (@{$srclast} > $WINDOW ){
+		shift (@{$srclast});
+	    }
+	    $src_count++;
 	}
-	my $idx = scalar @{$srclast};
-	if (@{$src_ph->{WORDS}}){
-	    @{$srclast->[$idx]} = @{$src_ph->{WORDS}->[-1]};
-	    @{$src_ph->{WORDS}->[-1]} = undef;
+	## store the data if flag is set
+	if ($StoreXML){
+	    # print STDERR "store $srcfile ...\n";
+	    $StoredXML{$srcfile}{data}  = clone($srcdata);
+	    $StoredXML{$srcfile}{first} = clone($srcfirst);
+	    $StoredXML{$srcfile}{last}  = clone($srclast);
+	    $StoredXML{$srcfile}{freq}  = clone($srcfreq);
+	    $StoredXML{$srcfile}{count}  = $src_count;
 	}
-	else{@{$srclast->[$idx]}=();}
-	if (@{$srclast} > $WINDOW ){
-	    shift (@{$srclast});
-	}
-	$src_count++;
     }
 
-    ## parse through target language text
-    while (ReadNextSentence($trg_fh,$trg_ph)){
-#	next unless (@{$trg_ph->{WORDS}});
-	if (@{$trgfirst} < $WINDOW ){
-	    my $idx = scalar @{$trgfirst};
+    if ($StoreXML && (exists $StoredXML{$trgfile})){
+	# print STDERR "retrieve $trgfile ...\n";
+	@{$trgdata} = @{ clone($StoredXML{$trgfile}{data}) };
+	@{$trgfirst} = @{ clone($StoredXML{$trgfile}{first}) };
+	@{$trglast} = @{ clone($StoredXML{$trgfile}{last}) };
+	%{$trgfreq} = %{ clone($StoredXML{$trgfile}{freq}) };
+	$trg_count = $StoredXML{$trgfile}{count};
+    }
+    else{
+
+	my ($trg_fh,$trg_ph) = init_parser($trgfile,$trgdata);
+
+	$trgfreq = $trg_ph->{WORDFREQ};
+
+	## parse through target language text
+	while (ReadNextSentence($trg_fh,$trg_ph)){
+#	    next unless (@{$trg_ph->{WORDS}});
+	    if (@{$trgfirst} < $WINDOW ){
+		my $idx = scalar @{$trgfirst};
+		if (@{$trg_ph->{WORDS}}){
+		    @{$trgfirst->[$idx]} = @{$trg_ph->{WORDS}->[-1]};
+		}
+		else{@{$trgfirst->[$idx]}=();}
+	    }
+	    my $idx = scalar @{$trglast};
 	    if (@{$trg_ph->{WORDS}}){
-		@{$trgfirst->[$idx]} = @{$trg_ph->{WORDS}->[-1]};
+		@{$trglast->[$idx]} = @{$trg_ph->{WORDS}->[-1]};
+		@{$trg_ph->{WORDS}->[-1]} = undef;
 	    }
-	    else{@{$trgfirst->[$idx]}=();}
+	    else{@{$trglast->[$idx]}=();}
+	    if (@{$trglast} > $WINDOW ){
+		shift (@{$trglast});
+	    }
+	    $trg_count++;
 	}
-	my $idx = scalar @{$trglast};
-	if (@{$trg_ph->{WORDS}}){
-	    @{$trglast->[$idx]} = @{$trg_ph->{WORDS}->[-1]};
-	    @{$trg_ph->{WORDS}->[-1]} = undef;
+	## store the data if flag is set
+	if ($StoreXML){
+	    # print STDERR "store $trgfile ...\n";
+	    $StoredXML{$trgfile}{data} = clone($trgdata);
+	    $StoredXML{$trgfile}{first} = clone($trgfirst);
+	    $StoredXML{$trgfile}{last}  = clone($trglast);
+	    $StoredXML{$trgfile}{freq}  = clone($trgfreq);
+	    $StoredXML{$trgfile}{count}  = $trg_count;
 	}
-	else{@{$trglast->[$idx]}=();}
-	if (@{$trglast} > $WINDOW ){
-	    shift (@{$trglast});
-	}
-	$trg_count++;
     }
-
 
     # find matches in initial windows
 #    my %first=();

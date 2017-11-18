@@ -8,6 +8,7 @@ version     '0.2';
 
 include     'Module::AutoInstall';
 
+requires 'Clone'       => 0;
 requires 'FindBin'     => 0;
 requires 'Encode'      => 0;
 requires 'File::BOM'   => 0;
@@ -24,6 +25,7 @@ auto_install;
 
 install_script 'srt2xml';
 install_script 'srtalign';
+install_script 'subalign';
 install_share;
 
 WriteAll;
