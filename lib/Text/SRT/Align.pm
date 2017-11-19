@@ -728,15 +728,17 @@ sub ReadDictionary{
 	    ## accept also dic's with initial freq's/prob's
 	    ##
 	    my @f = split(/\s/);             # split on TAB
-	    next unless ($#f>0);             # at least 2 fields
-	    next unless ($#f<4);             # at most 4 fields (avoid MWE's)
+	    next unless ($#f==1 || $#f==5);  # expext 2 or 6 fields
+
+	    ## expect src and trg token in certain fields
+	    my ($src,$trg) = $#f==1 ? @f : ($f[2],$f[3]);
 
 	    ## TODO: do we want to store prob's or freq's if they exist?
 	    ##       (but they are not used at the moment for 
 	    ##        ranking lexical matches anyway)
 
 	    ## store lexical items, possibly in reversed order
-	    $inverse ? $$dic{$f[-1]}{$f[-2]}++ : $$dic{$f[-2]}{$f[-1]}++;
+	    $inverse ? $$dic{$trg}{$src}++ : $$dic{$src}{$trg}++;
 	}
 	$LOADED_DICS{$file} = 1;
     }
