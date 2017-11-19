@@ -1,10 +1,9 @@
 #!/usr/bin/perl
 #
 # TODO:
-#  - avoid reloading dictionary
-#  - avoid system calls
-#  - avoid file system access
-#
+#  - avoid reloading dictionary ... solved
+#  - avoid system calls ........... solved
+#  - avoid file system access ..... mostly solved
 #
 
 use strict;
@@ -12,64 +11,82 @@ use FindBin qw($Bin);
 use lib "$Bin/lib";
 
 use File::Basename;
-use IPC::Open3;
-use File::Spec;
-use Symbol qw(gensym);
 use Getopt::Std;
 use Time::Local;
 use Text::SRT::Align qw/:all/;
 
 $Text::SRT::Align::StoreXML = 1;
 
+=head1 NAME
 
-# -A alt-dir ........... store alternative alignments in outdir/alt
-# -a accept-threshold .. accept alternative subtitle pairs > score
-# (allow one aligned document per subtitle --> useful for series)
-# -D duration-thr ...... min duration similarity (default=0.8)
-# -x score-threshold ... do not accept alignments below this score (default=1)
-# -s sync-threshold .... try syncing when score < threshold
-# -o ................... overwrite existing output files
-# -M max ............... max nr of pairs to try with synchronization
-# -L ................... skip PAIRS of symbolically linked files
-#
-# re-alignment is used for re-aligning the best match with synchronization
-# the same parameter are used for finding matches if all files are 
-# below the score threshold
-#
-#
-#
-#
-# options coming from srtalign (do we need them all)
-# TODO: overlap with subalign shortcuts --> SOLVED
-#
- # -S source-lang . source language ID
- # -T target-lang . target language ID
- # -c score ....... use cognates with LCSR>=score
- # -r score-range . use cognates in a certain range 1..score and take best
- # -l length ...... set minimal length of cognates (if used)
- # -i len ......... use identical strings with length>=len
- # -w size ........ set size for sliding window
- # -d dic ......... use dictionary in file 'dic'
- # -u ............. cognates/identicals that start with upper case only
- # -r char_set .... define a set of characters to be used for matching
- # -q ............. normalize length scores with (current) word frequencies
- # -b ............. use "best" alignment (least empty alignments)
- # -p nr .......... stop after <nr> candidates (when using -b)
- # -m MAX ......... in "best" alignment: use only MAX first & MAX last
- #                  (default = 10; 0 = all)
- # -f uplug-conf .. use fallback aligner if necessary
- # -P ............. use proportion of non-empty alignments as scoring function
- # -v ............. verbose output
+subalign - script for aligning the OpenSubtitlesXXXX corpora
 
+=head1 SYNOPSIS
+
+ subalign [OPTIONS] <srcdir> <trgdir>
+
+C<srcdir> and C<trgdir> are directories in the subtitle corpus 
+from the source and the target language. The script creates a
+corresponding sub-dir for the aligned data. For example
+
+ subalign en/2001/209475 et/2001/209475
+
+aligns files in the English and Estonian collection of subtitles
+for a movie from 2001 with the ID 209475. The resulting files will
+be created in C<en-et/2001/209475>.
+
+=head1 OPTIONS
+
+Command line arguments for subalign:
+
+ -A ................... store alternative alignments in outdir/alt
+ -a accept-threshold .. accept alternative subtitle pairs > score 
+                        (default=0.75)
+ -D duration-thr ...... min duration similarity (default=0.8)
+ -M max ............... max nr of subtitle file pairs to try
+ -L ................... skip symbolic links (when looking for files)
+ -x score-threshold ... threshold for overlap + metascore 
+                        (before aligning, default = 0.2)
+
+Command line arguments related to srt-alignment
+
+ -S source-lang . source language ID
+ -T target-lang . target language ID
+ -c score ....... use cognates with LCSR>=score
+ -r score-range . use cognates in a certain range 1..score and take best
+ -l length ...... set minimal length of cognates (if used)
+ -i len ......... use identical strings with length>=len
+ -w size ........ set size for sliding window
+ -d dic ......... use dictionary in file 'dic'
+ -u ............. cognates/identicals that start with upper case only
+ -r char_set .... define a set of characters to be used for matching
+ -q ............. normalize length scores with (current) word frequencies
+ -b ............. use "best" alignment (least empty alignments)
+ -p nr .......... stop after <nr> candidates (when using -b)
+ -m MAX ......... in "best" alignment: use only MAX first & MAX last
+                  (default = 10; 0 = all)
+ -f uplug-conf .. use fallback aligner if necessary
+ -v ............. verbose output
+
+=head1 DESCRIPTION
+
+subalign looks at pairs of movie subtitle files in the OpenSubtitle corpora
+and tries to find the best pair that aligns with the least empty translation units
+among all alternative subtitle files. It uses a score that combines the proportion
+of non-empty alignment units and a score based on metadata. The latter requires 
+meta-information stored in the subtitle files (which is available from OpenSubtitles2016)
+
+=cut
 
 
 use vars qw/$opt_A $opt_a $opt_b $opt_c $opt_D $opt_d
             $opt_f $opt_h $opt_I $opt_i $opt_L $opt_l
-            $opt_M $opt_m $opt_O $opt_o $opt_P $opt_p
+            $opt_M $opt_m $opt_O $opt_p
             $opt_q $opt_r $opt_S $opt_s $opt_T $opt_t
             $opt_u $opt_v $opt_w $opt_x/;
 
-getopts('Aa:bc:D:d:f:h:Ii:Ll:M:m:O:oPp:qr:S:s:T:t:uvw:x:');
+getopts('Aa:bc:D:d:f:h:Ii:Ll:M:m:O:p:qr:S:s:T:t:uvw:x:');
+
 
 # TODO ---> SOLVED
 # common parameters that need to be resolved!
@@ -80,8 +97,6 @@ getopts('Aa:bc:D:d:f:h:Ii:Ll:M:m:O:oPp:qr:S:s:T:t:uvw:x:');
 # t - toklen          min score                  --> -x (mixed/combined score)
 # r - cognate range   align paras (can skip now) --> delete
 # m - max matches     max subtitle pairs to try  --> -M
-
-
 
 
 
@@ -136,21 +151,6 @@ if (! $outdir){
     $outdir = join('/',@TrgPath);
 }
 
-open(NULL, ">", File::Spec->devnull);
-local *ERR;
-
-
-## some cleanup when certain system signals appear
-## - This is not good enough when the process is killed!
-my %outfiles = ();
-sub cleanup{
-    foreach (keys %outfiles){
-	unlink($_) if (-e $_);
-    }
-}
-$SIG{TERM} = \&cleanup;
-$SIG{INT} = \&cleanup;
-$SIG{ABRT} = \&cleanup;
 
 # grep all sub-files in source and target language dir
 
@@ -385,7 +385,6 @@ sub best_align{
 
 	my ($score,$overlap) = 
 	    subalign("$srcdir/$src","$trgdir/$trg",$alignments{$algfile});
-	$outfiles{"$outdir/$algfile.xml.gz"} = 1;
 
 	$alignScore{$algfile} = $score;
 	$alignOverlap{$algfile} = $overlap;
@@ -445,7 +444,7 @@ sub subalign{
 	&align($src,$trg,$alignments,
 	   SOURCE_LANG => $opt_S,   # setting source and target language enables
 	   TARGET_LANG => $opt_T,   # dic-lookup & also sets BEST_ALIGN (!!)
-	   SCORE_PROPORTION => $opt_P,
+	   SCORE_PROPORTION => 1,   # always use proportional score
 	   FALLBACK => $opt_f,
 	   VERBOSE => $opt_v,
 	   BEST_ALIGN => $opt_b,

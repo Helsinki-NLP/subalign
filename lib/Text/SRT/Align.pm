@@ -98,10 +98,11 @@ our $USE_IDENTICAL  = undef;
 our $SCORE_PROPORTION = 0;
 
 
-my %DIC          = ();
-my %LOADED_DICS  = ();
-my $srcfreq      = undef;
-my $trgfreq      = undef;
+our %DIC          = ();
+our %LOADED_DICS  = ();
+
+my $srcfreq       = undef;
+my $trgfreq       = undef;
 
 ## save bitexts in memory
 our $StoreXML    = 0;
@@ -717,8 +718,25 @@ sub ReadDictionary{
 	binmode(DIC,":utf8");
 	while (<DIC>){
 	    chomp;
-	    my ($src,$trg) = split(/\s/);
-	    $inverse ? $$dic{$trg}{$src}++ : $$dic{$src}{$trg}++;
+
+	    ## expect dictionary with only one-word items
+	    ## and only two fields (source and target)
+	    ##
+	    # my ($src,$trg) = split(/\s/);
+	    # $inverse ? $$dic{$trg}{$src}++ : $$dic{$src}{$trg}++;
+
+	    ## accept also dic's with initial freq's/prob's
+	    ##
+	    my @f = split(/\s/);             # split on TAB
+	    next unless ($#f>0);             # at least 2 fields
+	    next unless ($#f<4);             # at most 4 fields (avoid MWE's)
+
+	    ## TODO: do we want to store prob's or freq's if they exist?
+	    ##       (but they are not used at the moment for 
+	    ##        ranking lexical matches anyway)
+
+	    ## store lexical items, possibly in reversed order
+	    $inverse ? $$dic{$f[-1]}{$f[-2]}++ : $$dic{$f[-2]}{$f[-1]}++;
 	}
 	$LOADED_DICS{$file} = 1;
     }

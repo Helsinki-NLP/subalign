@@ -27,7 +27,7 @@ foreach my $l (keys %movies){
     my ($fh, $filename) = tempfile();
     close $fh;
     system("$SRT2XML -l $l -e $encoding{$l} < $Bin/srt/$l/$movies{$l}.srt > $filename");
-    is( compare( "$filename", "$Bin/xml/$l/$movies{$l}.xml" ),0, "convert $movies{$l}" );
+    is( compare( "$filename", "$Bin/xml/$l/$movies{$l}.xml" ),0, "convert $l/$movies{$l}" );
 }
 
 done_testing;
