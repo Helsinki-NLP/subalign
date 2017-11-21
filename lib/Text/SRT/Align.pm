@@ -1102,6 +1102,15 @@ sub ReadNextSentence{
 	else{
 	    # some additional cleanup, see: http://stackoverflow.com/questions/1016910/how-can-i-strip-invalid-xml-characters-from-strings-in-perl
 	    $line =~ tr/\e\x00-\x08\x0A\x0B\x0C\x0E-\x19//d;
+
+	    # this happened in OpenSubtitles2018/xml/ze_zh/2014/1972571/5937949.xml.gz (344.3)
+	    $line =~ s/\x{ef}\x{bf}\x{bf}//go;
+
+	    ## answer 6 from http://stackoverflow.com/questions/1016910/how-can-i-strip-invalid-xml-characters-from-strings-in-perl
+	    ## The complete regex for removal of invalid xml-1.0 characters is:
+	    ## (requires unicode layer in reading)
+	    # $line =~ s/[^\x09\x0A\x0D\x20-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]//go;
+
 	    $parser->parse_more($line);      # else: parse line
 	}
     }
