@@ -13,6 +13,7 @@ requires 'FindBin'        => 0;
 requires 'Encode'         => 0;
 requires 'Encode::Locale' => 0;
 requires 'File::BOM'      => 0;
+requires 'File::ShareDir' => 0;
 requires 'Getopt::Std'    => 0;
 requires 'IO::File'       => 0;
 requires 'IPC::Open3'     => 0;

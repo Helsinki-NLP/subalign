@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE cesAlign PUBLIC "-//CES//DTD XML cesAlign//EN" "">
 <cesAlign version="1.0">
-<linkGrp targType="s" fromDoc="en/2001/209475/54828.xml.gz" toDoc="et/2001/209475/3123721.xml.gz" score="0.918358228382142" algscore="0.962942167321729" overlap="0.931337998432577"">
+<linkGrp targType="s" fromDoc="en/2001/209475/54828.xml.gz" toDoc="et/2001/209475/3123721.xml.gz" algscore="0.962942167321729" overlap="0.931337998432577" score="0.918358228382142"">
 <link id="SL0" xtargets="1;1" overlap="0.883" />
 <link id="SL1" xtargets="2;2" overlap="0.896" />
 <link id="SL2" xtargets="3;3" overlap="0.846" />

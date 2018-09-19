@@ -367,7 +367,7 @@ sub print_ces{
 	    print $fh " $k=\"$$meta{$k}\"";
 	}
     }
-    print $fh "\">\n";
+    print $fh ">\n";
 
     foreach my $i (0..$#{$alg}){
 	print $fh "<link id=\"SL$i\" xtargets=\"";
