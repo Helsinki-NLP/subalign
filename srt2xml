@@ -9,7 +9,7 @@
 # -e encoding ....
 # -r file  ....... raw xml output file (without tokenizations)
 # -s ............. always start a new sentence at new time frames
-
+# -n ............. skip unicode normalisation
 #
 # 
 #
@@ -54,10 +54,10 @@ use Encode qw(decode encode);
 use Locale::Codes::Language 3.26;
 
 
-use vars qw/$opt_l $opt_e $opt_r $opt_s/;
+use vars qw/$opt_l $opt_e $opt_r $opt_s $opt_n/;
 
 $opt_l = 'unknown';
-getopts('l:e:r:s');
+getopts('l:e:r:sn');
 
 # make a three-letter language code
 if (length($opt_l) == 2){
@@ -243,6 +243,12 @@ while (my $line = <>){
 	# some strange markup in curly brackets in some files
 	$line=~s/\{.*?\}\#?//gs;
 
+	# some SRT text lines start with IDs (remove them)
+	$line=~s/^[0-9]+:\s+//;
+
+	## normalise some special punctuation variances
+	normalize_punctuation($line) unless ($opt_n);
+
 	$line = fix_punctuation($line);
 	if ($opt_l eq 'en' || $opt_l eq 'eng'){
 	    $line = fix_eng_ocr_errors($line);
@@ -284,7 +290,7 @@ while (my $line = <>){
 #	    elsif (($s_ended==2) && 
 #		   ($plain=~/^(\-?\s*[\"\']?[\p{N}\p{Ps}\p{Lu}l])/)){
 	    elsif (($s_ended==2) && 
-		   ($plain=~/^(\s*[\-\#\*\']*\s*[\"\'\[]?[\p{N}\p{Ps}\p{Lu}l])/)){
+		   ($plain=~/^(\s*[\―\-\#\*\']*\s*[\"\'\[]?[\p{N}\p{Ps}\p{Lu}l])/)){
 
 		closetags();
 		print "  </s>\n";
@@ -300,7 +306,7 @@ while (my $line = <>){
 
 	    ## new sentence if previous sentence ended with '...'
 	    ## and this one starts with bullets of quotes
-	    elsif (($s_ended==1) && ($plain=~/^\s*[\-\#\*\'\"]/)){
+	    elsif (($s_ended==1) && ($plain=~/^\s*[\―\-\#\*\'\"]/)){
 		closetags();
 		print "  </s>\n";
 		print "  <s id=\"$sid\">\n";
@@ -362,11 +368,11 @@ while (my $line = <>){
 		}
 	    }
 	    elsif ($plain_before=~/\s*\]\s*$/){
-		if ($plain_after=~/^\s*[\-\*\#]*\s*[\"\']?[\p{N}\p{Ps}\p{Lu}]/){		    
+		if ($plain_after=~/^\s*[\―\-\*\#]*\s*[\"\']?[\p{N}\p{Ps}\p{Lu}]/){		    
 		    $sentence_boundary = 1;
 		}
 	    }
-	    elsif ($plain_before=~/^\s*[\-\*\#]*\s*\[.{0,20}\]\s*$/s){
+	    elsif ($plain_before=~/^\s*[\―\-\*\#]*\s*\[.{0,20}\]\s*$/s){
 		$sentence_boundary = 1;
 	    }
 
@@ -401,7 +407,7 @@ while (my $line = <>){
 
 	## background info --> keep separate
 
-	if ($plain=~/^\s*[\-\*\#]*\s*\[.{0,20}\]\s*$/){
+	if ($plain=~/^\s*[\―\-\*\#]*\s*\[.{0,20}\]\s*$/){
 	    $s_ended = 3;
 	}
 
@@ -427,7 +433,7 @@ while (my $line = <>){
 	# - possibly followed by quotes or closing brackets ["'\]\}\)]?
 	# - possibly followed by a hyphen
 	# - followed by 0 or more spaces before end-of-string
-	elsif ($plain=~/([.!?:\]])[\"\'\]\}\)]?\-?\s*$/){
+	elsif ($plain=~/([.!?:\]])[\"\'\]\}\)]?\―\-?\s*$/){
 	    $s_ended=2;
 #	    print "===============maybe ended $1\n";
 	}
@@ -908,6 +914,43 @@ sub LangEncoding{
 ##          ind (indonesian), max (North Moluccan Malay), may (Malay?)
 }
 
+
+# this is mainly based on the moses script normalize-punctuation.perl 
+sub normalize_punctuation{
+    $_[0]=~s/\`/\'/g;
+    $_[0]=~s/\'\'/ \" /g;
+    $_[0]=~s/„/\"/g;
+    $_[0]=~s/“/\"/g;
+    $_[0]=~s/”/\"/g;
+    $_[0]=~s/[―–]/-/g;
+    $_[0]=~s/´/\'/g;
+    $_[0]=~s/([a-z])‘([a-z])/$1\'$2/gi;
+    $_[0]=~s/([a-z])’([a-z])/$1\'$2/gi;
+    $_[0]=~s/‘/\"/g;
+    $_[0]=~s/‚/\"/g;
+    $_[0]=~s/’/\"/g;
+    $_[0]=~s/''/\"/g;
+    $_[0]=~s/´´/\"/g;
+    $_[0]=~s/…/.../g;
+    # French quotes
+    $_[0]=~s/ « / \"/g;
+    $_[0]=~s/« /\"/g;
+    $_[0]=~s/«/\"/g;
+    $_[0]=~s/ » /\" /g;
+    $_[0]=~s/ »/\"/g;
+    $_[0]=~s/»/\"/g;
+    # handle pseudo-spaces
+    $_[0]=~s/ \%/\%/g;
+    $_[0]=~s/nº /nº /g;
+    $_[0]=~s/ :/:/g;
+    $_[0]=~s/ ºC/ ºC/g;
+    $_[0]=~s/ cm/ cm/g;
+    $_[0]=~s/ \?/\?/g;
+    $_[0]=~s/ \!/\!/g;
+    $_[0]=~s/ ;/;/g;
+    $_[0]=~s/, /, /g; 
+    $_[0]=~s/ +/ /g;
+}
 
 
 
