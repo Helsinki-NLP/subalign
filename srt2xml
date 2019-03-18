@@ -94,7 +94,7 @@ my %NONBREAKING=();
 read_non_breaking($SHARED_HOME.'/nonbreaking_prefix.'.$opt_l,\%NONBREAKING);
 eval{
     my $SHARED_UPLUG = File::ShareDir::dist_dir('Uplug');
-    my $LangID = language_code2code($opt_l, 'alpha-2', 'alpha-3');
+    my $LangID = language_code2code($opt_l, 'alpha-3', 'alpha-2');
     read_non_breaking($SHARED_UPLUG.
 		      '/lang/nonbreaking_prefixes/nonbreaking_prefix.'.
 		      $LangID,
