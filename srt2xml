@@ -462,6 +462,7 @@ print "  </s>\n";
 print F "\n  </s>\n" if ($opt_r);
 
 print_xml_footer();
+close F if ($opt_r);
 
 ####################################################################
 
@@ -625,10 +626,10 @@ sub print_xml_header{
 
 
 sub print_xml_footer{
-    print "</document>\n";
     if ($opt_r){
 	print F "</document>\n";
     }
+    print "</document>\n";
 }
 
 
