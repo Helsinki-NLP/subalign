@@ -548,6 +548,20 @@ sub align_srt{
 
     while($s<=$#{$src} && $t<=$#{$trg}) {
 
+	## time slots is zero of negative ....
+	## --> slightly adjust start time
+	if ($src->[$s]->{start} >= $src->[$s]->{end}){
+	    print STDERR "start after/equal end for $s ($src->[$s]->{start} - $src->[$s]->{end})\n"
+		if ($VERBOSE);
+	    $src->[$s]->{start} -= 0.01;
+	}
+	if ($trg->[$t]->{start} >= $trg->[$t]->{end}){
+	    print STDERR "start after/equal end for $t ($trg->[$t]->{start} - $trg->[$t]->{end})\n"
+		if ($VERBOSE);
+	    $trg->[$t]->{start} -= 0.01;
+	}
+
+
 	my ($srcbefore,$trgbefore,
 	    $srcafter,$trgafter,
 	    $common,$not_common) = &overlap($src->[$s]->{start},
@@ -618,17 +632,17 @@ sub align_srt{
 	    $s+=$ds+1;
 	    $t+=$dt+1;
 	}
-#	else{
+	else{
 #	    if ($VERBOSE){
-#		print STDERR "s[0]: $src->[$s]->{start}->$src->[$s]->{end}\n";
-#		print STDERR "s[1]: $src->[$s+1]->{start}->$src->[$s+1]->{end}\n";
-#		print STDERR "s[2]: $src->[$s+2]->{start}->$src->[$s+2]->{end}\n";
-#		print STDERR "t[0]: $trg->[$t]->{start}->$trg->[$t]->{end}\n";
-#		print STDERR "t[1]: $trg->[$t+1]->{start}->$trg->[$t+1]->{end}\n";
-#		print STDERR "t[2]: $trg->[$t+2]->{start}->$trg->[$t+2]->{end}\n";
-#		print STDERR "strange ...\n";
+		print STDERR "s[0]: $src->[$s]->{start}->$src->[$s]->{end}\n";
+		print STDERR "s[1]: $src->[$s+1]->{start}->$src->[$s+1]->{end}\n";
+		print STDERR "s[2]: $src->[$s+2]->{start}->$src->[$s+2]->{end}\n";
+		print STDERR "t[0]: $trg->[$t]->{start}->$trg->[$t]->{end}\n";
+		print STDERR "t[1]: $trg->[$t+1]->{start}->$trg->[$t+1]->{end}\n";
+		print STDERR "t[2]: $trg->[$t+2]->{start}->$trg->[$t+2]->{end}\n";
+		print STDERR "strange ...\n";
 #	    }
-#	}
+	}
     }
 
 
