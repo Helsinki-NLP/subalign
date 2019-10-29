@@ -1,0 +1,438 @@
+#!/bin/env perl
+#-*-perl-*-
+
+=encoding UTF-8
+
+=head1 NAME
+
+mt2srt - script for aligning time stamps to a translation of subtitles
+
+=head1 USAGE
+
+ mt2srt [OPTIONS] template.srt < input > output.srt
+
+=head1 OPTIONS
+
+ -i srt|xml .......... template format (default = srt)
+ -o srt .............. output format (only srt is supported so far)
+ -l length-penalty ... penalty for exceeding hard length limit
+ -s non-eos-penalty .. penalty for alignments that end within a sentence
+
+=head1 DESCRIPTION
+
+Subtitle frames do not have to match the frames in which individual subtitle lines are shown. This script aligns the translated text to a given template (typically the original source language SRT file) to project the frames to the translations. Sentences will be split and merged in the best possible way to match the original segmentation. The algorithm uses a length-based alignment algorithm with some additional constraints.
+
+=head1 TODO
+
+A more flexible setup of alignment parameters.
+Better newline heuristics.
+Less hard-coded clause boundary detection mechanisms.
+Optimize alignment (especially for long files).
+
+=cut 
+
+
+use strict;
+use XML::Parser;
+use File::BOM qw( :all );
+
+binmode(STDIN,":utf8");
+binmode(STDOUT,":utf8");
+
+use vars qw($opt_i $opt_l $opt_o $opt_s);
+use Getopt::Std;
+
+getopts('i:o:l:s:');
+
+my $InputFormat  = $opt_i || 'srt';
+my $OutputFormat = $opt_o || 'srt';
+
+my $HardMaxLineLength = 37;
+my $SoftMaxLineLength = 30;
+
+## penalty if aligning at non-sentence breaks
+## (added as factor in alignment prior)
+my $NotEosPenalty = $opt_s || 0.5;
+
+## penalty for links exceeding the hard length limit
+my $LengthLimitPenalty = $opt_l || 0.2;
+
+
+## parse source language file (OPUS XML with time stamps or SRT)
+
+my $InputFile = shift(@ARGV);
+
+# my @SrcSent   = ();
+my @SrcLength = (0);
+my @StartTime = ();
+my @EndTime   = ();
+
+if ($InputFormat eq 'opus'){
+    my $XmlParser = new XML::Parser( Handlers => {Start => \&XmlStart,
+						  Char => \&XmlChar} );
+    $XmlParser->parsefile($InputFile, ErrorContext => 3);
+}
+else{
+    &read_srt_file($InputFile);
+}
+
+
+## read translations and split into sentence fragments
+
+my @TrgSent = ();       # the actual sentences
+my @TrgLength = (0);    # cumulative lengths of the text
+my @IsSentEnd = (0);    # store info about sentence boundaries
+
+while (<>){
+    chomp;
+    ## split at punctuations followed by space 
+    ## as possible clause boundaries
+    ## TODO: do we need to support other patterns as well?
+    while (s/^(.*?\P{P}\p{P})\s//){
+	&add_segments($1);
+    }
+    &add_segments($_) if (/\S/);
+    $IsSentEnd[-1] = 1;
+}
+
+## remove initial zeros
+unshift(@SrcLength);
+unshift(@TrgLength);
+
+
+
+## add segments to the list
+## if the string is longer than the hard limit:
+## then split on spaces after some reasonable length
+sub add_segments{
+    my $text = shift;
+    ## split long strings
+    if (length($text) > $HardMaxLineLength){
+	my $halfLength = int(length($text)/2);
+	# my $max = $halfLength > $SoftMaxLineLength ? $SoftMaxLineLength : $halfLength;
+	my $max = $SoftMaxLineLength;
+	while ($text=~s/^(.{$max}\S*)\s//){
+	    push(@TrgSent,$1);
+	    push(@TrgLength,$TrgLength[-1]+length($1));
+	    push(@IsSentEnd,0);
+	}
+	if ($text=~/\S/){
+	    push(@TrgSent,$text);
+	    push(@TrgLength,$TrgLength[-1]+length($text));
+	    push(@IsSentEnd,0);
+	}
+	return 1;
+    }
+    push(@TrgSent,$text);
+    ## lengths need to be cumulative!
+    push(@TrgLength,$TrgLength[-1]+length($text));
+    push(@IsSentEnd,0);
+}
+
+
+## and now align source and target using length-based sentence alignment
+
+my @SrcId = (0..$#SrcLength);
+my @TrgId = (0..$#TrgLength);
+my @links = &sentence_align(\@SrcLength,\@TrgLength,\@SrcId,\@TrgId);
+
+
+
+
+my $count = 1;
+foreach my $l (@links){
+    if (@{$$l{src}}>1){
+	print STDERR "WARNING: more than one source segment!";
+    }
+    my $SrcId = $$l{src}[0];
+    print $count,"\n";
+    print $StartTime[$SrcId],' --> ',$EndTime[$SrcId],"\n";
+    my @trg = ();
+    my $length = 0;
+    my $lineCount = 1;
+    foreach my $TrgId (@{$$l{trg}}){
+	push (@trg,$TrgSent[$TrgId]);
+    }
+    print &insert_newlines(join(' ',@trg));
+    print "\n\n";
+    $count++;
+}
+
+
+
+
+## simple heuristics to split lines
+sub insert_newlines{
+    my $text = shift;
+    if (length($text) > $HardMaxLineLength){
+	my $halfLength = int(length($text)/2);
+	my ($min,$max) = ($halfLength,$SoftMaxLineLength);
+	($min,$max) = ($max,$min) if ($min>$max);
+	if ($text=~s/([\.\!\?\"\)\]])\s(\S*.{$min,$max})$/$1\n$2/){
+	    return $text;
+	}
+	if ($text=~s/([,;:\'\-])\s(\S*.{$min,$max})$/$1\n$2/){
+	    return $text;
+	}
+	if ($text=~s/\s(\S*.{$halfLength})$/\n$1/){
+	    return $text;
+	}
+	# if ($text=~s/^(.{$halfLength}\S*)\s/$1\n/){
+	#     return $text;
+	# }
+    }
+    return $text;
+}
+
+
+
+sub read_srt_file{
+    my $file = shift;
+    # open F,"<$file" || die "cannot read from $file";
+    # binmode(F,":utf8");
+    open_bom(F, $file, ':utf8') || die "cannot read from $file";
+    while (<F>){
+	if (/^[0-9]+$/){
+	    my $line = <F>;
+	    chomp($line);
+	    my ($start,$end) = split(/\s+\-\-\>\s+/,$line);
+	    push(@StartTime,$start);
+	    push(@EndTime,$end);
+	    my $text = '';
+	    while (<F>){
+		last unless (/\S/);
+		$text.=$_;
+	    }
+	    ## delete optional counter
+	    ## and save cumulative text-length
+	    $text=~s/^[0-9]+:\s+//;
+	    if ($text=~/\S/){
+		push(@SrcLength,$SrcLength[-1]+length($text));
+	    }
+	}
+    }
+    close(F);
+}
+
+sub XmlStart{
+    my ($p,$e,%attr) = @_;
+    ## pretend that every time stamp starts a new sentence
+    if ($e eq 'time'){
+	$p->{SENT}=~s/^\s+//s;
+	$p->{SENT}=~s/\s+$//s;
+	$p->{SENT}=~s/\s{2,}/ /gs;
+	if ($p->{SENT}){
+	    # push(@SrcSent,$p->{SENT});
+	    ## lengths need to be cumulative!
+	    push(@SrcLength,$SrcLength[-1]+length($p->{SENT}));
+	    push(@EndTime,$attr{value});
+	    if (@StartTime < @EndTime){
+		if (@StartTime){
+		    push(@StartTime,$StartTime[-1]);
+		}
+		else{
+		    push(@StartTime,'00:00:00,000');
+		}
+	    }
+	}
+	else {
+	    push(@StartTime,$attr{value});
+	}
+	$p->{SENT} = '';
+    }
+}
+
+sub XmlChar{
+    my ($p,$c) = @_;
+    if (exists $p->{SENT}){
+	$p->{SENT} .= $c;
+    }
+}
+
+
+
+# this is a vanilla implementation of church and gale
+sub sentence_align {
+  my ($LEN1,$LEN2,$IDS1,$IDS2) = @_;
+
+  if (not @{$LEN1}){
+      my @LINKS=();
+      $LINKS[0]{src} = [];
+      foreach (0..$#{$LEN2}-1){
+#	  push(@{$LINKS[0]{trg}},$$IDS2{$$LEN2[$_]});
+	  push(@{$LINKS[0]{trg}},$$IDS2[$_]);
+      }
+      return @LINKS;
+  }
+  if (not @{$LEN2}){
+      my @LINKS=();
+      $LINKS[0]{trg} = [];
+      foreach (0..$#{$LEN1}-1){
+#	  push(@{$LINKS[0]{src}},$$IDS1{$$LEN1[$_]});
+	  push(@{$LINKS[0]{src}},$$IDS1[$_]);
+      }
+      return @LINKS;
+  }
+
+  # parameters
+  # TODO: do we want to support other options via command-line arguments
+  my %PRIOR;
+#  $PRIOR{1}{1} = 0.89;
+#  $PRIOR{1}{0} = 0.01/2;
+#  $PRIOR{0}{1} = 0.01/2;
+#  $PRIOR{2}{1} = 0.089/2;
+#  $PRIOR{1}{2} = 0.089/2;
+##  $PRIOR{2}{2} = 0.011;
+#  $PRIOR{3}{1} = 0.011/2;
+#  $PRIOR{1}{3} = 0.011/2;
+
+# for time-stamp alignment: only 1:x alignments!
+  $PRIOR{1}{0} = 0.04;   # rare case of deletions
+  $PRIOR{1}{1} = 0.24;   # no reason to prefer anything ...
+  $PRIOR{1}{2} = 0.24;   # (is this true?)
+  $PRIOR{1}{3} = 0.24;
+  $PRIOR{1}{4} = 0.24;
+
+  # dynamic programming
+  my (@COST,@BACK);
+  $COST[0][0] = 0;
+  for(my $i1=0;$i1<=$#{$LEN1};$i1++) {
+    for(my $i2=0;$i2<=$#{$LEN2};$i2++) {
+      my $EosPenalty = $IsSentEnd[$i2] ? 1 : $NotEosPenalty;
+      next if $i1 + $i2 == 0;
+      $COST[$i1][$i2] = 1e10;
+      foreach my $d1 (keys %PRIOR) {
+	next if $d1>$i1;
+	foreach my $d2 (keys %{$PRIOR{$d1}}) {
+	  next if $d2>$i2;
+	  my $len2 = $$LEN2[$i2]-$$LEN2[$i2-$d2];
+	  my $LenPenalty = $len2 > $HardMaxLineLength ? 1: $LengthLimitPenalty;
+	  my $cost = $COST[$i1-$d1][$i2-$d2] - log($LenPenalty * $EosPenalty * $PRIOR{$d1}{$d2}) +  
+	    &match($$LEN1[$i1]-$$LEN1[$i1-$d1], $$LEN2[$i2]-$$LEN2[$i2-$d2]);
+#	  print "($i1->".($i1-$d1).",$i2->".($i2-$d2).") [".($LEN1[$i1]-$LEN1[$i1-$d1]).",".($LEN2[$i2]-$LEN2[$i2-$d2])."] = $COST[$i1-$d1][$i2-$d2] - ".log($PRIOR{$d1}{$d2})." + ".&match($LEN1[$i1]-$LEN1[$i1-$d1], $LEN2[$i2]-$LEN2[$i2-$d2])." = $cost\n";
+	  if ($cost < $COST[$i1][$i2]) {
+	    $COST[$i1][$i2] = $cost;
+	    @{$BACK[$i1][$i2]} = ($i1-$d1,$i2-$d2);
+	  }
+	}
+      }
+#      print $COST[$i1][$i2]."($i1-$BACK[$i1][$i2][0],$i2-$BACK[$i1][$i2][1]) ";
+    }
+#    print "\n";
+  }
+
+
+  # back tracking
+  my %NEXT=();
+  my @LINKS=();
+
+  my $i1 = $#{$LEN1};
+  my $i2 = $#{$LEN2};
+
+  while($i1>0 || $i2>0) {
+#    print "back $i1 $i2\n";
+      @{$NEXT{$BACK[$i1][$i2][0]}{$BACK[$i1][$i2][1]}} = ($i1,$i2);
+      ($i1,$i2) = ($BACK[$i1][$i2][0],$BACK[$i1][$i2][1]);
+  }
+  while($i1<$#{$LEN1} || $i2<$#{$LEN2}) {
+      push(@LINKS,{});
+#     print "fwd $i1 $i2\n";
+#      print '<link id="SL'.$LINK_ID.'" xtargets="';
+      for(my $i=$i1;$i<$NEXT{$i1}{$i2}[0];$i++) {
+#	  my $sid = $$IDS1{$$LEN1[$i]};
+	  my $sid = $$IDS1[$i];
+	  push(@{$LINKS[-1]{src}},$sid);
+#	  print " " unless $i == $i1;
+#	  print $$IDS1[$i];
+      }
+#      print ";";
+      for(my $i=$i2;$i<$NEXT{$i1}{$i2}[1];$i++) {
+#	  my $sid = $$IDS2{$$LEN2[$i]};
+	  my $sid = $$IDS2[$i];
+	  push(@{$LINKS[-1]{trg}},$sid);
+#	  push(@{$LINKS[-1]{trg}},$$LEN2[$i]);
+#	  print " " unless $i == $i2;
+#	  print $$IDS2[$i];
+      }
+#      print "\" />\n";
+      ($i1,$i2) = @{$NEXT{$i1}{$i2}};
+  }  
+
+  return @LINKS;
+}
+
+
+
+sub match {
+  my ($len1,$len2) = @_;
+  my $c = 1;
+  my $s2 = 6.8;
+
+  if ($len1==0 && $len2==0) { return 0; }
+  my $mean = ($len1 + $len2/$c) / 2;
+  my $z = ($c * $len1 - $len2)/sqrt($s2 * $mean);
+  if ($z < 0) { $z = -$z; }
+  my $pd = 2 * (1 - &pnorm($z));
+  if ($pd>0) { return -log($pd); }
+  return 25;
+}
+
+sub pnorm {
+  my ($z) = @_;
+  my $t = 1/(1 + 0.2316419 * $z);
+  return 1 - 0.3989423 * exp(-$z * $z / 2) *
+    ((((1.330274429 * $t 
+	- 1.821255978) * $t 
+       + 1.781477937) * $t 
+      - 0.356563782) * $t
+     + 0.319381530) * $t;
+}
+
+
+__END__
+
+=head1 AUTHOR
+
+Jörg Tiedemann, L<https://github.com/jorgtied>
+
+=head1 BUGS AND SUPPORT
+
+Please report any bugs or feature requests to
+L<https://github.com/Helsinki-NLP/subalign>.
+
+=head1 SEE ALSO
+
+More information can be found in L<Text::SRT::Align>
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright 2019 Jörg Tiedemann.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with this program.  If not, see L<http://www.gnu.org/licenses/>.
+
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+=cut

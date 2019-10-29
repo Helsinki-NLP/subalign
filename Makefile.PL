@@ -3,8 +3,8 @@ use inc::Module::Install;
 name        'Text-SRT-Align';
 abstract    'Convert and align translated movie subtitles';
 author      'Joerg Tiedemann';
-license     'gpl';
-version     '0.2';
+license     'lgpl';
+version     '0.3';
 
 include     'Module::AutoInstall';
 
@@ -28,6 +28,7 @@ auto_install;
 install_script 'srt2xml';
 install_script 'srtalign';
 install_script 'subalign';
+install_script 'mt2srt';
 install_share;
 
 WriteAll;

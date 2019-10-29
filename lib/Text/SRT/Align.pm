@@ -1911,18 +1911,19 @@ sub parse_srt{
 
 __END__
 
+
 =head1 AUTHOR
 
-Jörg Tiedemann, L<https://bitbucket.org/tiedemann>
-
-=head1 TODO
-
-Add length-based option (using time slot length correlations) also in combination with character length.
+Jörg Tiedemann, L<https://github.com/jorgtied>
 
 =head1 BUGS AND SUPPORT
 
 Please report any bugs or feature requests to
-L<https://bitbucket.org/tiedemann/subalign>.
+L<https://github.com/Helsinki-NLP/subalign>.
+
+=head1 TODO
+
+Add length-based option (using time slot length correlations) also in combination with character length.
 
 =head1 SEE ALSO
 

@@ -99,12 +99,12 @@ __END__
 
 =head1 AUTHOR
 
-Jörg Tiedemann, L<https://bitbucket.org/tiedemann>
+Jörg Tiedemann, L<https://github.com/jorgtied>
 
 =head1 BUGS AND SUPPORT
 
 Please report any bugs or feature requests to
-L<https://bitbucket.org/tiedemann/subalign>.
+L<https://github.com/Helsinki-NLP/subalign>.
 
 =head1 SEE ALSO
 
