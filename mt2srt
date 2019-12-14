@@ -55,7 +55,7 @@ my $SoftMaxLineLength = 30;
 my $NotEosPenalty = $opt_s || 0.5;
 
 ## penalty for links exceeding the hard length limit
-my $LengthLimitPenalty = $opt_l || 0.2;
+my $LengthLimitPenalty = $opt_l || 0.5;
 
 
 ## parse source language file (OPUS XML with time stamps or SRT)
