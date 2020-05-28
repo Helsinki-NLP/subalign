@@ -15,8 +15,11 @@ mt2srt - script for aligning time stamps to a translation of subtitles
 
  -i srt|xml .......... template format (default = srt)
  -o srt .............. output format (only srt is supported so far)
- -l length-penalty ... penalty for exceeding hard length limit
- -s non-eos-penalty .. penalty for alignments that end within a sentence
+ -l length-penalty ... penalty for exceeding hard length limit (1 = no penalty = default)
+ -L .................. relative length limit violation penalty (only in combination with -l)
+ -s non-eos-penalty .. penalty for alignments that end within a sentence (1 = no penalty, default = 0.1)
+ -x length ........... soft length limit (default = 30)
+ -X length ........... hard length limit (default = 50)
 
 =head1 DESCRIPTION
 
@@ -39,23 +42,29 @@ use File::BOM qw( :all );
 binmode(STDIN,":utf8");
 binmode(STDOUT,":utf8");
 
-use vars qw($opt_i $opt_l $opt_o $opt_s);
+use vars qw($opt_i $opt_l $opt_L $opt_o $opt_s $opt_x $opt_X);
 use Getopt::Std;
 
-getopts('i:o:l:s:');
+getopts('i:o:l:Ls:x:X:');
 
 my $InputFormat  = $opt_i || 'srt';
 my $OutputFormat = $opt_o || 'srt';
 
-my $HardMaxLineLength = 37;
-my $SoftMaxLineLength = 30;
+# my $HardMaxLineLength = $opt_x || 37;
+# my $SoftMaxLineLength = $opt_X || 30;
+
+my $HardMaxLineLength = $opt_x || 50;
+my $SoftMaxLineLength = $opt_X || 30;
+
 
 ## penalty if aligning at non-sentence breaks
 ## (added as factor in alignment prior)
-my $NotEosPenalty = $opt_s || 0.5;
+# my $NotEosPenalty = $opt_s || 0.5;
+my $NotEosPenalty = $opt_s || 0.1;
 
 ## penalty for links exceeding the hard length limit
-my $LengthLimitPenalty = $opt_l || 0.5;
+# my $LengthLimitPenalty = $opt_l || 0.5;
+my $LengthLimitPenalty = $opt_l || 1;
 
 
 ## parse source language file (OPUS XML with time stamps or SRT)
@@ -190,7 +199,7 @@ sub read_srt_file{
     my $file = shift;
     # open F,"<$file" || die "cannot read from $file";
     # binmode(F,":utf8");
-    open_bom(F, $file, ':utf8') || die "cannot read from $file";
+    open_bom(F, $file, ':utf8'); #  || die "cannot read from $file";
     while (<F>){
 	if (/^[0-9]+$/){
 	    my $line = <F>;
@@ -306,7 +315,10 @@ sub sentence_align {
 	foreach my $d2 (keys %{$PRIOR{$d1}}) {
 	  next if $d2>$i2;
 	  my $len2 = $$LEN2[$i2]-$$LEN2[$i2-$d2];
-	  my $LenPenalty = $len2 > $HardMaxLineLength ? 1: $LengthLimitPenalty;
+	  my $LenPenalty = 1;
+	  if (($LengthLimitPenalty < 1) && ($len2 > $HardMaxLineLength)) {
+	      $LenPenalty = $opt_L ? $LengthLimitPenalty ** ($len2 - $HardMaxLineLength) : $LengthLimitPenalty;
+	  }
 	  my $cost = $COST[$i1-$d1][$i2-$d2] - log($LenPenalty * $EosPenalty * $PRIOR{$d1}{$d2}) +  
 	    &match($$LEN1[$i1]-$$LEN1[$i1-$d1], $$LEN2[$i2]-$$LEN2[$i2-$d2]);
 #	  print "($i1->".($i1-$d1).",$i2->".($i2-$d2).") [".($LEN1[$i1]-$LEN1[$i1-$d1]).",".($LEN2[$i2]-$LEN2[$i2-$d2])."] = $COST[$i1-$d1][$i2-$d2] - ".log($PRIOR{$d1}{$d2})." + ".&match($LEN1[$i1]-$LEN1[$i1-$d1], $LEN2[$i2]-$LEN2[$i2-$d2])." = $cost\n";
