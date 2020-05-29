@@ -42,10 +42,10 @@ use File::BOM qw( :all );
 binmode(STDIN,":utf8");
 binmode(STDOUT,":utf8");
 
-use vars qw($opt_i $opt_l $opt_L $opt_o $opt_s $opt_x $opt_X);
+use vars qw($opt_i $opt_l $opt_L $opt_o $opt_s $opt_x $opt_X $opt_n);
 use Getopt::Std;
 
-getopts('i:o:l:Ls:x:X:');
+getopts('i:o:l:Lns:x:X:');
 
 my $InputFormat  = $opt_i || 'srt';
 my $OutputFormat = $opt_o || 'srt';
@@ -162,7 +162,13 @@ foreach my $l (@links){
     foreach my $TrgId (@{$$l{trg}}){
 	push (@trg,$TrgSent[$TrgId]);
     }
-    print &insert_newlines(join(' ',@trg));
+    if ($opt_n){
+	print &insert_newlines(join(' ',@trg));
+    }
+    else{
+	print join(' ',@trg);
+    }
+
     print "\n\n";
     $count++;
 }
@@ -201,7 +207,7 @@ sub read_srt_file{
     # binmode(F,":utf8");
     open_bom(F, $file, ':utf8'); #  || die "cannot read from $file";
     while (<F>){
-	if (/^[0-9]+$/){
+	if (/^[0-9]+\s*\r?$/){
 	    my $line = <F>;
 	    chomp($line);
 	    my ($start,$end) = split(/\s+\-\-\>\s+/,$line);
