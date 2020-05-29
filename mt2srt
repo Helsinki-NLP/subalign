@@ -20,6 +20,7 @@ mt2srt - script for aligning time stamps to a translation of subtitles
  -s non-eos-penalty .. penalty for alignments that end within a sentence (1 = no penalty, default = 0.1)
  -x length ........... soft length limit (default = 30)
  -X length ........... hard length limit (default = 50)
+ -n .................. add newlines using some heuristics
 
 =head1 DESCRIPTION
 
