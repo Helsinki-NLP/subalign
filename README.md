@@ -89,7 +89,7 @@ of each subtitle file (size of the windows defines how far from the start
 and the end it'll look).
 
 The similarity score is normalized by the distances from start/end
-only two points will be used (one from the begiining and one from the end
+only two points will be used (one from the beginning and one from the end
 with the best scores)
 
 
